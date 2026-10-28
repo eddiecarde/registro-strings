@@ -166,11 +166,11 @@ a.enlace { text-align: center; text-decoration: none; }
 .tr-inv:first-child { border-top: none; }
 .tr-inv .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 17px; }
 .tr-inv .top a { color: inherit; }
-.tr-inv .chips { margin-bottom: 4px; }
-.tr-inv .chip { min-width: 58px; padding: 10px 12px; font-size: 16px; font-weight: 600; }
-.tr-inv .chip.todos { min-width: 0; font-weight: 400; color: var(--muted); }
+.tr-inv .sels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
+.tr-inv .sels select { font-size: 16px; padding: 10px 6px; }
+.tr-inv .chip { padding: 8px 12px; font-size: 14px; }
 .tr-inv .info { font-size: 13px; }
-html.sol .tr-inv .chip { font-size: 19px; padding: 12px 14px; }
+html.sol .tr-inv .sels select { font-size: 19px; padding: 12px 6px; }
 html.sol .tr-inv .info { font-size: 16px; }
 
 .pv { display: grid; grid-template-columns: 48px 1fr; gap: 8px; align-items: start; padding: 8px 0; border-top: var(--borde) solid var(--line); }
@@ -286,7 +286,7 @@ html.sol .btn { font-size: 19px; border-width: 2.5px; }
 <script src="diseno.js"></script>
 <script>
 "use strict";
-const VERSION = "3.1.0";
+const VERSION = "3.2.0";
 // Configuración de la planta: inversores por subcampo y strings por inversor
 const INVERSORES = 22, ENTRADAS = 20;
 // Conectores del inversor (versión 3.0 anotaba la marquilla por PV; solo se usa para pasar esos datos)
@@ -351,26 +351,19 @@ const prefTr = t => String(t).replace(/\d+$/, "");
 const fmtTr = (n, pref = "MQR") => pref + String(n).padStart(3, "0");
 const nomTr = id => id.split(".")[1];
 
-// Diseño (lista de inversores): a qué inversor y a qué strings debe llegar cada tracker
+// Diseño (lista de inversores): a qué inversor va cada tracker y cuántos strings tiene.
+// No dice qué número de string (1 a 20) trae cada marquilla: ese número se anota en campo.
 window.DISENO ||= {};
 function diseno(id) {
   const [sc, t] = String(id).split("."), d = window.DISENO[sc]?.[t];
-  return d ? { inv: d[0], desde: d[1], hasta: d[1] + d[2] - 1, n: d[2], bfa: d[3] } : null;
+  return d ? { inv: d[0], n: d[1], bfa: d[2] } : null;
 }
-const fmtDis = d => d.n > 1 ? `${fmtInv(d.inv)} · S${d.desde} a S${d.hasta}` : `${fmtInv(d.inv)} · S${d.desde}`;
-// Según el diseño, qué tracker va en cada string de cada inversor: "inv|string" -> {t, i}
-const posDis = {};
-function posDiseno(sc) {
-  if (posDis[sc]) return posDis[sc];
-  const m = {};
-  for (const [t, d] of Object.entries(window.DISENO[sc] || {})) for (let k = 0; k < d[2]; k++) m[d[0] + "|" + (d[1] + k)] = { t, i: k };
-  return (posDis[sc] = m);
-}
-// Si la marquilla (inversor y string) no corresponde al tracker que dice, devuelve el que dice el diseño
-function marquillaFueraDeDiseno(sc, t, s) {
-  if (!levantado(s)) return null;
-  const dueno = posDiseno(sc)[s.mInv + "|" + s.mStr];
-  return dueno && numTr(dueno.t) !== s.mTr ? dueno : null;
+// Tracker de un subcampo por su número (85 -> "MQR085")
+const trPorNum = (sc, n) => window.TRACKERS[sc]?.find(t => numTr(t) === n);
+// Si la marquilla dice un inversor distinto al que el diseño da a su tracker, devuelve el del diseño
+function invFueraDeDiseno(sc, mt, mi) {
+  const t = mt && mi && trPorNum(sc, mt), d = t && diseno(sc + "." + t);
+  return d && d.inv !== mi ? d.inv : null;
 }
 
 // ---------- Modelo de datos ----------
@@ -525,8 +518,8 @@ function ubicacion(sc, id, i, cx = cruce(sc)) {
 }
 // En qué trackers se anotó una marquilla encontrada en el inversor
 const origen = (cx, f) => cx.enTr[claveM(f.mt, f.mi, f.ms)] || [];
-// Trackers que según el diseño llegan a un inversor, ordenados por su primer string
-const trackersDiseno = (sc, inv) => Object.entries(window.DISENO[sc] || {}).filter(([, d]) => d[0] === inv).sort((a, b) => a[1][1] - b[1][1]).map(([t]) => t);
+// Trackers que según el diseño llegan a un inversor, ordenados por número
+const trackersDiseno = (sc, inv) => Object.keys(window.DISENO[sc] || {}).filter(t => window.DISENO[sc][t][0] === inv).sort((a, b) => numTr(a) - numTr(b));
 
 function avance(id) {
   const r = registros[id], n = nStrings(id), sc = id.split(".")[0], cx = cruce(sc); let lev = 0, con = 0;
@@ -566,10 +559,9 @@ function novedades(id, cx, marq) {
   cx ||= cruce(sc); marq ||= marquillas(sc);
   for (let i = 0; i < nStrings(id); i++) {
     const s = r.s?.[i]; if (!s) continue;
-    const S = "S" + (i + 1), dueno = marquillaFueraDeDiseno(sc, t, s);
+    const S = "S" + (i + 1), invD = invFueraDeDiseno(sc, s.mTr, s.mInv);
     if (s.mTr && s.mTr !== real) out.push({ i, txt: `${S}: la marquilla dice tracker ${fmtTr(s.mTr, prefTr(t))}` });
-    if (dueno) out.push({ i, diseno: true, txt: `${S}: la marquilla dice ${fmtInv(s.mInv)} S${s.mStr}, que según el diseño es de ${dueno.t}` +
-      (s.mTr === real && d ? ` (este tracker va a ${fmtDis(d)})` : "") });
+    if (invD) out.push({ i, diseno: true, txt: `${S}: la marquilla dice ${fmtInv(s.mInv)}, pero según el diseño el ${fmtTr(s.mTr, prefTr(t))} va al ${fmtInv(invD)}` });
     if (s.mInv && s.mStr && (marq[s.mInv + "|" + s.mStr] || []).length > 1) out.push({ i, txt: `${S}: marquilla ${fmtInv(s.mInv)} S${s.mStr} repetida en otro string del subcampo` });
     if (!levantado(s)) continue;
     const ub = ubicacion(sc, id, i, cx);
@@ -583,23 +575,25 @@ function novedades(id, cx, marq) {
   return out;
 }
 
-// Revisión de un inversor: por cada string del diseño y cada marquilla encontrada, novedades y cruce con el tracker
+// Revisión de un inversor: cuántos strings de cada tracker del diseño se encontraron, y cada marquilla contra el tracker y el diseño
 function revisarInv(sc, inv, cx = cruce(sc)) {
-  const pref = prefSC(sc), rev = invCompleto(cx, inv), enc = encontradas(sc, inv), e = registros[idInv(sc, inv)]?.e || {};
+  const pref = prefSC(sc), rev = invCompleto(cx, inv), e = registros[idInv(sc, inv)]?.e || {}, trs = trackersDiseno(sc, inv);
+  // propio = marquilla de este inversor y de un tracker que según el diseño llega aquí
+  const enc = encontradas(sc, inv).map(f => ({ ...f, propio: f.mi === inv && trs.includes(trPorNum(sc, f.mt)) }));
   const filas = {}, novs = [];
   const fila = k => filas[k] ||= { novs: [], info: [] };
   const nov = (k, nv) => { fila(k).novs.push(nv); novs.push(nv); };
   const enlace = (id, t) => `<a href="#/t/${esc(id)}">${esc(t)}</a>`;
-  for (let n = 1; n <= ENTRADAS; n++) {
-    const dueno = posDiseno(sc)[inv + "|" + n];
-    if (dueno && !e[n]?.tr && rev && !enc.some(f => f.otro && f.mi === inv && f.ms === n))
-      nov(String(n), { el: `S${n}`, txt: `S${n} (${dueno.t} S${dueno.i + 1}): no se encontró en el inversor` });
+  for (const t of trs) {
+    const n = diseno(sc + "." + t).n, k = enc.filter(f => f.propio && f.mt === numTr(t)).length;
+    if (k > n) nov("t:" + t, { el: t, txt: `${t}: se encontraron ${k} strings y el diseño dice ${n}` });
+    else if (k < n && rev) nov("t:" + t, { el: t, txt: `${t}: se encontraron ${k} de ${n} strings en el inversor` });
   }
   for (const f of enc) {
-    const M = txtM(sc, f), el = f.otro ? M : `S${f.ms}`, dueno = posDiseno(sc)[f.mi + "|" + f.ms];
+    const M = txtM(sc, f), el = M, t = trPorNum(sc, f.mt), d = t && diseno(sc + "." + t);
     if (f.mi !== inv) nov(f.slot, { el, txt: `${M}: la marquilla dice ${fmtInv(f.mi)}` });
-    if (f.otro && dueno && numTr(dueno.t) !== f.mt) nov(f.slot, { el, diseno: true, txt: `${M}: según el diseño, ${fmtInv(f.mi)} S${f.ms} es de ${dueno.t}` });
-    if (f.otro && f.mi === inv && e[f.ms]?.tr) nov(f.slot, { el, txt: `${M}: hay otro cable con la marquilla ${fmtInv(inv)} S${f.ms}` });
+    if (d && d.inv !== f.mi) nov(f.slot, { el, diseno: true, txt: `${M}: según el diseño el ${t} va al ${fmtInv(d.inv)}` });
+    if (f.otro && f.mi === inv && e[f.ms]?.tr) nov(f.slot, { el, txt: `${M}: hay otro cable con la marquilla ${fmtInv(inv)} S${f.ms} (${fmtTr(e[f.ms].tr, pref)})` });
     const rep = (cx.enInv[claveM(f.mt, f.mi, f.ms)] || []).filter(u => !(u.inv === inv && u.slot === f.slot));
     if (rep.length) nov(f.slot, { el, txt: `${M}: también se encontró en ${rep.map(u => fmtInv(u.inv)).join(", ")}` });
     const org = origen(cx, f);
@@ -607,23 +601,28 @@ function revisarInv(sc, inv, cx = cruce(sc)) {
       fila(f.slot).info.push(numTr(o.t) !== f.mt
         ? `<span class="warn">Está en el tracker ${enlace(o.id, o.t)} S${o.i + 1} (marquilla de otro tracker)</span>`
         : `<span class="ok">✓ Coincide con el tracker ${enlace(o.id, o.t)} S${o.i + 1}</span>`);
-      const d = diseno(o.id);
-      if (d && d.inv !== inv) nov(f.slot, { el, diseno: true, txt: `${M}: está en el tracker ${o.t}, que según el diseño va a ${fmtInv(d.inv)}` });
+      const d2 = diseno(o.id);
+      if (numTr(o.t) !== f.mt && d2 && d2.inv !== inv) nov(f.slot, { el, diseno: true, txt: `${M}: está en el tracker ${o.t}, que según el diseño va al ${fmtInv(d2.inv)}` });
     }
     if (!org.length) {
-      const t = window.TRACKERS[sc].find(y => numTr(y) === f.mt), a = t && avance(sc + "." + t);
+      const a = t && avance(sc + "." + t);
       if (!t) nov(f.slot, { el, txt: `${M}: el tracker ${fmtTr(f.mt, pref)} no existe en ${sc}` });
       else if (a.lev === a.n) nov(f.slot, { el, txt: `${M}: no está anotada en ningún tracker (el ${t} ya se levantó y no la tiene)` });
       else fila(f.slot).info.push(`<span class="muted">Falta levantar el tracker ${enlace(sc + "." + t, t)} para comparar</span>`);
     }
   }
-  return { filas, novs, enc, rev };
+  return { filas, novs, enc, rev, trs };
 }
 const novedadesInv = (sc, inv, cx = cruce(sc)) => revisarInv(sc, inv, cx).novs;
 function estadoInversor(sc, inv, cx = cruce(sc)) {
-  const R = revisarInv(sc, inv, cx), dis = Object.keys(posDiseno(sc)).filter(k => +k.split("|")[0] === inv).length;
+  const R = revisarInv(sc, inv, cx);
+  let dis = 0, enc = 0;
+  for (const t of R.trs) {
+    const n = diseno(sc + "." + t).n;
+    dis += n; enc += Math.min(n, R.enc.filter(f => f.propio && f.mt === numTr(t)).length);
+  }
   return {
-    dis, rev: R.rev, enc: R.enc.filter(f => !f.otro).length, otros: R.enc.filter(f => f.otro).length,
+    dis, enc, rev: R.rev, otros: R.enc.filter(f => !f.propio).length,
     cruzados: R.enc.filter(f => origen(cx, f).length).length, novs: R.novs.length, ajenos: R.novs.filter(n => n.diseno).length,
   };
 }
@@ -639,10 +638,10 @@ function novedadesSC(sc) {
 function agregarEncontrada(sc, inv, f, t0, ids, desde) {
   if (!f.mt || !f.mi || !f.ms || f.ms > ENTRADAS) return;
   if (encontradas(sc, inv).some(x => x.mt === f.mt && x.mi === f.mi && x.ms === f.ms)) return;
-  const iid = idInv(sc, inv), r = registros[iid] ||= registroVacio(iid), dueno = posDiseno(sc)[inv + "|" + f.ms];
+  const iid = idInv(sc, inv), r = registros[iid] ||= registroVacio(iid);
   r.ts ||= {};
   const poner = (k, v) => { escribirCampo(r, k, v); r.ts[k] = t0; };
-  if (f.mi === inv && dueno && numTr(dueno.t) === f.mt && !r.e?.[f.ms]?.tr) poner(f.ms + ".tr", f.mt);
+  if (f.mi === inv && !r.e?.[f.ms]?.tr) poner(f.ms + ".tr", f.mt);
   else {
     const k = Array.from({ length: MAX_OTROS }, (_, j) => j + 1).find(j => !r.e?.["x" + j]?.xt);
     if (!k) return;
@@ -669,8 +668,7 @@ function migrarLegado() {
     if (!existeTracker(id)) continue;
     (r.s || []).forEach((s, i) => {
       if (!s || !s.inv || !s.ent) return;
-      const d = diseno(id);
-      agregarEncontrada(sc, s.inv, { mt: s.mTr || numTr(nomTr(id)), mi: s.mInv || s.inv, ms: s.mStr || (d ? d.desde + i : "") }, t0, ids, r);
+      agregarEncontrada(sc, s.inv, { mt: s.mTr || numTr(nomTr(id)), mi: s.mInv || s.inv, ms: s.mStr }, t0, ids, r);
       s.inv = ""; s.ent = ""; r.ts ||= {}; r.ts[i + ".inv"] = t0; r.ts[i + ".ent"] = t0; ids.add(id);
     });
   }
@@ -975,7 +973,7 @@ function vistaFicha(sc, t) {
     <div class="card">
       <p class="muted" style="margin:0">Subcampo ${esc(sc)} · tracker ${idx + 1} de ${lista.length}</p>
       <p class="ficha-id">${esc(id)}</p>
-      ${dis ? `<p class="disenio">Según el diseño va a <b>${fmtDis(dis)}</b> <span class="muted">(${esc(dis.bfa)}, ${dis.n} strings)</span></p>` : ""}
+      ${dis ? `<p class="disenio">Según el diseño va al <b>${fmtInv(dis.inv)}</b> con <b>${dis.n} strings</b> <span class="muted">(${esc(dis.bfa)})</span></p>` : ""}
       <span class="estado" id="estado"></span>
     </div>
     <div class="card">
@@ -1036,9 +1034,9 @@ function vistaFicha(sc, t) {
       const i = +div.dataset.i, msgs = [];
       const mTr = aNum(div.querySelector(".mTr").value), mInv = aNum(div.querySelector(".mInv").value), mStr = aNum(div.querySelector(".mStr").value);
       if (mTr && mTr !== real) msgs.push(`<span class="warn">⚠ La marquilla es de otro tracker: ${fmtTr(mTr, pref)}</span>`);
-      const dueno = marquillaFueraDeDiseno(sc, t, { mTr, mInv, mStr });
-      if (dueno) msgs.push(`<span class="err">⚠ Según el diseño, ${fmtInv(mInv)} S${mStr} es de ${esc(dueno.t)} S${dueno.i + 1}</span>`);
-      else if (mTr && mInv && mStr && posDiseno(sc)[mInv + "|" + mStr]) msgs.push(`<span class="ok">✓ Coincide con el diseño</span>`);
+      const invD = invFueraDeDiseno(sc, mTr, mInv);
+      if (invD) msgs.push(`<span class="err">⚠ Según el diseño, el ${fmtTr(mTr, pref)} va al ${fmtInv(invD)}</span>`);
+      else if (mTr && mInv && trPorNum(sc, mTr)) msgs.push(`<span class="ok">✓ El inversor coincide con el diseño</span>`);
       const rep = (marq[mInv + "|" + mStr] || []).filter(u => !(u.id === id && u.i === i));
       if (mInv && mStr && rep.length) msgs.push(`<span class="warn">⚠ ${fmtInv(mInv)} S${mStr} ya está anotada en ${rep.map(u => `${nomTr(u.id)} S${u.i + 1}`).join(", ")}</span>`);
       // Cruce con lo leído en los inversores
@@ -1128,12 +1126,12 @@ function vistaInversor(sc, inv) {
     <div class="card" id="invEstado"></div>
     <div class="card">
       <h2>Trackers de este inversor (${trs.length})</h2>
-      <p class="muted" style="margin-top:-6px">Según el diseño. Toca cada string cuya marquilla encuentres en el inversor; tocar <b>Todos</b> marca los del tracker.</p>
+      <p class="muted" style="margin-top:-6px">Según el diseño. En cada tracker elige el número de string que dice cada marquilla que encuentres (S1 a S20).</p>
       <div id="invTrs"></div>
     </div>
     <div class="card">
       <h2>Otros strings encontrados</h2>
-      <p class="muted" style="margin-top:-6px">Cables con marquilla que no es de la lista de arriba. Escribe el tracker y el string (ej. <b>19 3</b>); si la marquilla dice otro inversor, cámbialo.</p>
+      <p class="muted" style="margin-top:-6px">Cables con marquilla de un tracker que no está en la lista de arriba, o que dice otro inversor. Escribe el tracker y el string (ej. <b>19 3</b>); si la marquilla dice otro inversor, cámbialo.</p>
       <div id="invOtros"></div>
       <div class="directo">
         <div><label for="oQ">Tracker y string</label><input id="oQ" inputmode="tel" autocomplete="off" placeholder="Ej. 19 3"></div>
@@ -1145,7 +1143,7 @@ function vistaInversor(sc, inv) {
     </div>
     <div class="card">
       <label class="check"><input type="checkbox" id="rev" ${r.rev ? "checked" : ""}>Inversor revisado completo</label>
-      <p class="muted" style="margin-top:-4px">Al marcarlo, los strings del diseño que no marcaste quedan como novedad.</p>
+      <p class="muted" style="margin-top:-4px">Al marcarlo, los trackers con menos strings de los que dice el diseño quedan como novedad.</p>
       <label for="obsInv">Observaciones del inversor</label>
       <textarea id="obsInv" rows="2">${esc(r.obs || "")}</textarea>
       <a class="btn sec enlace" href="#/historial/${esc(id)}">Historial de este inversor</a>
@@ -1166,39 +1164,41 @@ function vistaInversor(sc, inv) {
       <div class="stat"><span>Coinciden con lo anotado en el tracker</span><b>${est.cruzados}</b></div>
       <div class="stat"><span>Novedades</span><b class="${est.novs ? "err" : ""}">${est.novs}</b></div>
       <div class="stat"><span>Estado</span><b class="${est.rev ? "ok" : ""}">${est.rev ? "Revisado" : "En revisión"}</b></div>`;
+    const pref = prefSC(sc);
+    const opciones = v => `<option value="">S —</option>` + Array.from({ length: ENTRADAS }, (_, k) => k + 1)
+      .map(n => `<option value="${n}" ${n === v ? "selected" : ""}>S${n}${e[n]?.tr && n !== v ? ` · ${fmtTr(e[n].tr, pref)}` : ""}</option>`).join("");
     document.getElementById("invTrs").innerHTML = trs.map(t => {
-      const idT = sc + "." + t, d = diseno(idT), nums = Array.from({ length: d.n }, (_, k) => d.desde + k);
-      const todos = nums.every(n => e[n]?.tr), msgs = [];
-      for (const n of nums) for (const m of msgsDe(R.filas[n])) msgs.push(`S${n}: ${m}`);
+      const idT = sc + "." + t, d = diseno(idT), nt = numTr(t);
+      const mios = R.enc.filter(f => f.propio && f.mt === nt).sort((a, b) => a.ms - b.ms), msgs = [];
+      for (const m of msgsDe(R.filas["t:" + t])) msgs.push(m);
+      for (const f of mios) for (const m of msgsDe(R.filas[f.slot])) msgs.push(`S${f.ms}: ${m}`);
       const otros = [];
       for (let i = 0; i < nStrings(idT); i++) for (const u of ubicacion(sc, idT, i, cx)) if (u.inv !== inv) otros.push(`S${i + 1} en ${fmtInv(u.inv)}`);
       if (otros.length) msgs.push(`<span class="err">⚠ Strings de este tracker encontrados en otro inversor: ${otros.join(", ")}</span>`);
+      const sels = Array.from({ length: Math.max(d.n, mios.length) }, (_, k) =>
+        `<select class="sel-str" data-t="${nt}" data-v="${mios[k]?.ms || ""}" aria-label="String de ${esc(t)}">${opciones(mios[k]?.ms || "")}</select>`).join("");
       return `<div class="tr-inv">
-        <div class="top"><a href="#/t/${esc(idT)}"><b>${esc(t)}</b></a><span class="muted">${nums.filter(n => e[n]?.tr).length}/${d.n}</span></div>
-        <div class="chips">${nums.map(n => `<button class="chip ${e[n]?.tr ? "on" : ""}" data-n="${n}" data-t="${numTr(t)}">S${n}</button>`).join("")}
-          <button class="chip todos" data-todos="${esc(t)}">${todos ? "Ninguno" : "Todos"}</button></div>
+        <div class="top"><a href="#/t/${esc(idT)}"><b>${esc(t)}</b></a><span class="${mios.length === d.n ? "ok" : "muted"}">${mios.length}/${d.n} strings</span></div>
+        <div class="sels">${sels}</div>
         ${msgs.length ? `<div class="info">${msgs.join("<br>")}</div>` : ""}
       </div>`;
     }).join("") || `<p class="muted">El diseño no tiene trackers para este inversor.</p>`;
-    const otrosEnc = R.enc.filter(f => f.otro);
+    const otrosEnc = R.enc.filter(f => !f.propio);
     document.getElementById("invOtros").innerHTML = otrosEnc.map(f => `<div class="tr-inv">
         <div class="top"><b>${esc(txtM(sc, f))}</b><button class="chip" data-quitar="${f.slot}" aria-label="Quitar">✕ Quitar</button></div>
         <div class="info">${msgsDe(R.filas[f.slot]).join("<br>")}</div></div>`).join("");
-    app.querySelectorAll("[data-n]").forEach(b => b.onclick = () => {
-      const n = +b.dataset.n, on = !!e[n]?.tr;
-      cambiar({ [n + ".tr"]: on ? "" : +b.dataset.t }, `S${n} ${on ? "desmarcado" : "encontrado"}`);
-      pintar();
-    });
-    app.querySelectorAll("[data-todos]").forEach(b => b.onclick = () => {
-      const t = b.dataset.todos, d = diseno(sc + "." + t), c = {};
-      const nums = Array.from({ length: d.n }, (_, k) => d.desde + k), todos = nums.every(n => e[n]?.tr);
-      for (const n of nums) c[n + ".tr"] = todos ? "" : numTr(t);
-      cambiar(c, `${t} ${todos ? "desmarcado" : "encontrado completo"}`, true);
+    app.querySelectorAll(".sel-str").forEach(sel => sel.onchange = () => {
+      const t = +sel.dataset.t, viejo = +sel.dataset.v || 0, nuevo = +sel.value || 0, c = {};
+      if (nuevo && e[nuevo]?.tr && e[nuevo].tr !== t &&
+          !confirm(`S${nuevo} ya está asignado a ${fmtTr(e[nuevo].tr, pref)}. ¿Pasarlo a ${fmtTr(t, pref)}?`)) return pintar();
+      if (viejo) c[viejo + ".tr"] = "";
+      if (nuevo) c[nuevo + ".tr"] = t;
+      cambiar(c, nuevo ? `${fmtTr(t, pref)} S${nuevo}` : `${fmtTr(t, pref)} S${viejo} quitado`, true);
       pintar();
     });
     app.querySelectorAll("[data-quitar]").forEach(b => b.onclick = () => {
       const k = b.dataset.quitar;
-      cambiar({ [k + ".xt"]: "", [k + ".xi"]: "", [k + ".xs"]: "" }, "otro string quitado", true);
+      cambiar(k.startsWith("x") ? { [k + ".xt"]: "", [k + ".xi"]: "", [k + ".xs"]: "" } : { [k + ".tr"]: "" }, "otro string quitado", true);
       pintar();
     });
   }
@@ -1212,10 +1212,11 @@ function vistaInversor(sc, inv) {
     if (!t) msgs.push(`<span class="err">⚠ No existe el tracker ${m.mt} en ${esc(sc)}</span>`);
     else if (m.ms > ENTRADAS) msgs.push(`<span class="err">⚠ El string va de 1 a ${ENTRADAS}</span>`);
     else {
-      const cx = cruce(sc), dueno = posDiseno(sc)[m.mi + "|" + m.ms], org = cx.enTr[claveM(m.mt, m.mi, m.ms)] || [];
+      const cx = cruce(sc), d = diseno(sc + "." + t), org = cx.enTr[claveM(m.mt, m.mi, m.ms)] || [], e = registros[id]?.e || {};
       msgs.push(`<b>${esc(txtM(sc, m))}</b>`);
-      if (m.mi === inv && dueno && numTr(dueno.t) === m.mt) msgs.push(`<span class="ok">Es del diseño de este inversor: se marcará S${m.ms} de ${esc(dueno.t)}</span>`);
-      else if (dueno && numTr(dueno.t) !== m.mt) msgs.push(`<span class="err">⚠ Según el diseño, ${fmtInv(m.mi)} S${m.ms} es de ${esc(dueno.t)}</span>`);
+      if (d && d.inv !== m.mi) msgs.push(`<span class="err">⚠ Según el diseño el ${esc(t)} va al ${fmtInv(d.inv)}</span>`);
+      else if (m.mi === inv && trs.includes(t)) msgs.push(`<span class="ok">Es un tracker de este inversor: se agregará en su lista</span>`);
+      if (m.mi === inv && e[m.ms]?.tr && e[m.ms].tr !== m.mt) msgs.push(`<span class="warn">⚠ S${m.ms} ya está asignado a ${fmtTr(e[m.ms].tr, prefSC(sc))}</span>`);
       if (m.mi !== inv) msgs.push(`<span class="warn">⚠ La marquilla dice otro inversor</span>`);
       msgs.push(org.length ? org.map(o => `<span class="ok">✓ Anotada en el tracker ${esc(o.t)} S${o.i + 1}</span>`).join("<br>") : `<span class="muted">Aún no está anotada en ningún tracker</span>`);
     }
@@ -1225,9 +1226,8 @@ function vistaInversor(sc, inv) {
     const m = leerMarquilla(oQ.value, +oInv.value), e = registros[id]?.e || {};
     if (!window.TRACKERS[sc].some(y => numTr(y) === m.mt)) return toast(m.mt ? `No existe el tracker ${m.mt} en ${sc}` : "Escribe el número de tracker");
     if (!m.ms || m.ms > ENTRADAS) return toast(`Escribe el número de string (1 a ${ENTRADAS})`);
-    const dueno = posDiseno(sc)[m.mi + "|" + m.ms];
-    if (m.mi === inv && dueno && numTr(dueno.t) === m.mt) cambiar({ [m.ms + ".tr"]: m.mt }, `S${m.ms} encontrado`);
-    else if (encontradas(sc, inv).some(f => f.mt === m.mt && f.mi === m.mi && f.ms === m.ms)) return toast("Ese string ya está anotado");
+    if (encontradas(sc, inv).some(f => f.mt === m.mt && f.mi === m.mi && f.ms === m.ms)) return toast("Ese string ya está anotado");
+    if (m.mi === inv && !e[m.ms]?.tr) cambiar({ [m.ms + ".tr"]: m.mt }, `${txtM(sc, m)} encontrado`, true);
     else {
       const k = Array.from({ length: MAX_OTROS }, (_, j) => j + 1).find(j => !e["x" + j]?.xt);
       if (!k) return toast(`Máximo ${MAX_OTROS} strings de otro lado por inversor`);
@@ -1329,9 +1329,9 @@ function vistaHistorial(filtro) {
 
 // ---------- Exportar / importar ----------
 const COLS = ["Subcampo", "Tracker real", "Nombre completo", "Nº strings", "String", "Marquilla tracker", "Marquilla inversor", "Marquilla string",
-  "Encontrado en inversor", "Marquilla = tracker", "Marquilla = inversor", "Diseño inversor", "Diseño strings", "Marquilla = diseño",
+  "Encontrado en inversor", "Marquilla = tracker", "Marquilla = inversor", "Diseño inversor", "Diseño nº strings", "Marquilla = diseño",
   "Encontrado = diseño", "Estado", "Observaciones", "Técnico", "Fecha"];
-const ANCHOS = [10, 11, 16, 10, 7, 15, 16, 14, 18, 17, 18, 14, 14, 17, 17, 11, 24, 16, 17];
+const ANCHOS = [10, 11, 16, 10, 7, 15, 16, 14, 18, 17, 18, 14, 16, 17, 17, 11, 24, 16, 17];
 const siNo = (hay, ok) => hay ? (ok ? "Sí" : "No") : "";
 function filasExport() {
   const filas = [];
@@ -1347,8 +1347,8 @@ function filasExport() {
           s.mTr ? fmtTr(s.mTr, prefTr(t)) : "", s.mInv || "", s.mStr ? "S" + s.mStr : "",
           ub.length === 1 ? ub[0].inv : ub.map(u => u.inv).join(", "),
           siNo(s.mTr, s.mTr === real), siNo(ub.length, ub.every(u => u.inv === s.mInv)),
-          d ? d.inv : "", d ? (d.n > 1 ? `S${d.desde}-S${d.hasta}` : `S${d.desde}`) : "",
-          siNo(levantado(s) && posDiseno(sc)[s.mInv + "|" + s.mStr], !marquillaFueraDeDiseno(sc, t, s)),
+          d ? d.inv : "", d ? d.n : "",
+          siNo(s.mTr && s.mInv && trPorNum(sc, s.mTr), !invFueraDeDiseno(sc, s.mTr, s.mInv)),
           siNo(ub.length && d, ub.every(u => u.inv === d?.inv)),
           e, r.obs || "", r.tec || "", r.fecha || ""]);
       }
@@ -1356,10 +1356,10 @@ function filasExport() {
   }
   return filas;
 }
-// Una fila por string del diseño de cada inversor revisado o con datos, más los strings de otro lado encontrados
-const COLS_INV = ["Subcampo", "Inversor", "Revisado", "Tipo", "Tracker según diseño", "String del inversor", "Encontrado",
+// Por inversor con datos: una fila por string encontrado de cada tracker del diseño, una por cada string que falta, y los de otro lado
+const COLS_INV = ["Subcampo", "Inversor", "Revisado", "Tipo", "Tracker", "Strings según diseño", "Estado",
   "Marquilla tracker", "Marquilla inversor", "Marquilla string", "Tracker real (anotado en el tracker)", "Novedades", "Observaciones", "Técnico", "Fecha"];
-const ANCHOS_INV = [10, 9, 10, 12, 20, 18, 11, 16, 16, 15, 30, 80, 24, 16, 17];
+const ANCHOS_INV = [10, 9, 10, 9, 10, 19, 15, 16, 16, 15, 30, 80, 24, 16, 17];
 function filasInversores() {
   const filas = [];
   for (const sc of Object.keys(window.TRACKERS)) {
@@ -1369,17 +1369,17 @@ function filasInversores() {
       if (!tieneDatos(r)) continue;
       const R = revisarInv(sc, inv, cx), rv = R.rev ? "Sí" : "No", fin = [r.obs || "", r.tec || "", r.fecha || ""];
       const novsDe = k => (R.filas[k]?.novs || []).map(n => n.txt).join(" | ");
-      for (let n = 1; n <= ENTRADAS; n++) {
-        const dueno = posDiseno(sc)[inv + "|" + n], f = R.enc.find(x => x.slot === String(n));
-        if (!dueno && !f) continue;
-        filas.push([sc, inv, rv, "Diseño", dueno ? `${dueno.t} S${dueno.i + 1}` : "", "S" + n, f ? "Sí" : R.rev ? "No" : "Pendiente",
-          f ? fmtTr(f.mt, pref) : "", f ? inv : "", f ? "S" + n : "", f ? origen(cx, f).map(o => `${o.t} S${o.i + 1}`).join(", ") : "",
-          novsDe(String(n)), ...fin]);
+      const filaF = (tipo, t, n, f) => [sc, inv, rv, tipo, t || "", n, "Encontrado", fmtTr(f.mt, pref), f.mi, "S" + f.ms,
+        origen(cx, f).map(o => `${o.t} S${o.i + 1}`).join(", "), novsDe(f.slot), ...fin];
+      for (const t of R.trs) {
+        const n = diseno(sc + "." + t).n, mios = R.enc.filter(f => f.propio && f.mt === numTr(t)).sort((a, b) => a.ms - b.ms);
+        for (const f of mios) filas.push(filaF("Diseño", t, n, f));
+        for (let k = mios.length; k < n; k++)
+          filas.push([sc, inv, rv, "Diseño", t, n, R.rev ? "No encontrado" : "Pendiente", "", "", "", "", k === mios.length ? novsDe("t:" + t) : "", ...fin]);
       }
-      for (const f of R.enc.filter(x => x.otro)) {
-        const dueno = posDiseno(sc)[f.mi + "|" + f.ms];
-        filas.push([sc, inv, rv, "Otro", dueno ? `${dueno.t} S${dueno.i + 1}` : "", "", "Sí", fmtTr(f.mt, pref), f.mi, "S" + f.ms,
-          origen(cx, f).map(o => `${o.t} S${o.i + 1}`).join(", "), novsDe(f.slot), ...fin]);
+      for (const f of R.enc.filter(x => !x.propio)) {
+        const t = trPorNum(sc, f.mt), d = t && diseno(sc + "." + t);
+        filas.push(filaF("Otro", t, d ? d.n : "", f));
       }
     }
   }
