@@ -286,7 +286,7 @@ html.sol .btn { font-size: 19px; border-width: 2.5px; }
 <script src="diseno.js"></script>
 <script>
 "use strict";
-const VERSION = "3.2.0";
+const VERSION = "3.2.1";
 // Configuración de la planta: inversores por subcampo y strings por inversor
 const INVERSORES = 22, ENTRADAS = 20;
 // Conectores del inversor (versión 3.0 anotaba la marquilla por PV; solo se usa para pasar esos datos)
@@ -356,7 +356,9 @@ const nomTr = id => id.split(".")[1];
 window.DISENO ||= {};
 function diseno(id) {
   const [sc, t] = String(id).split("."), d = window.DISENO[sc]?.[t];
-  return d ? { inv: d[0], n: d[1], bfa: d[2] } : null;
+  if (!d) return null;
+  // diseno.js anterior a la 3.2 traía también el primer string: [inversor, primer string, nº strings, estación]
+  return d.length > 3 ? { inv: d[0], n: d[2], bfa: d[3] } : { inv: d[0], n: d[1], bfa: d[2] };
 }
 // Tracker de un subcampo por su número (85 -> "MQR085")
 const trPorNum = (sc, n) => window.TRACKERS[sc]?.find(t => numTr(t) === n);
