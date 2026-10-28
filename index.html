@@ -276,7 +276,7 @@ html.sol .btn { font-size: 19px; border-width: 2.5px; }
 <script src="diseno.js"></script>
 <script>
 "use strict";
-const VERSION = "2.1.0";
+const VERSION = "3.0.0";
 // Configuración de la planta: inversores por subcampo y strings por inversor
 const INVERSORES = 22, ENTRADAS = 20;
 // Conectores del inversor: 28 PV en 6 MPPT. Los 20 "habituales" son los que normalmente van conectados
@@ -306,11 +306,14 @@ function escribir(clave, valor) {
   catch (e) { toast("⚠ No se pudo guardar en el teléfono. Exporta tus datos."); return false; }
 }
 let registros = leer(K.reg, {});
+// Sube cada vez que cambian los datos (para recalcular el cruce solo cuando hace falta)
+let verDatos = 0;
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
 
 const agregarA = (clave, ids) => { const s = new Set(leer(clave, [])); ids.forEach(i => s.add(i)); escribir(clave, [...s]); };
 // Guarda y marca los trackers como pendientes de exportar y de enviar a la oficina
 function guardarRegistros(ids = []) {
+  verDatos++;
   escribir(K.reg, registros);
   agregarA(K.cambios, ids);
   agregarA(K.sync, ids);
@@ -366,47 +369,72 @@ function marquillaFueraDeDiseno(sc, t, s) {
 }
 
 // ---------- Modelo de datos ----------
-// Por string: mTr/mInv/mStr = lo que dice la marquilla del cable; inv/ent = inversor y PV donde está conectado.
+// Dos tipos de registro, cada uno con la marquilla tal como se lee en ese extremo del cable:
+// - Tracker ("MA0719.MQR085"): por string, mTr/mInv/mStr = lo que dice la marquilla en el tracker.
+//   inv/ent = conexión anotada en la versión 2.x; al abrir la app se pasa al inversor (migrarLegado).
+// - Inversor ("MA0719.INV12"): por PV, mt/mi/ms = lo que dice la marquilla en el inversor;
+//   est = "vacio" (sin cable) o "ilegible" (cable sin marquilla).
 // Cada campo guarda en r.ts la hora (ISO) de su último cambio, para unir datos de varios técnicos campo por campo.
 const CAMPOS = ["mTr", "mInv", "mStr", "inv", "ent"];
-const TXT_CAMPO = { mTr: "marquilla tracker", mInv: "marquilla inversor", mStr: "marquilla string", inv: "inversor", ent: "PV" };
+const CAMPOS_PV = ["mt", "mi", "ms", "est"];
+const TXT_CAMPO = { mTr: "marquilla tracker", mInv: "marquilla inversor", mStr: "marquilla string", inv: "inversor", ent: "PV",
+  mt: "marquilla tracker", mi: "marquilla inversor", ms: "marquilla string", est: "estado" };
+const TXT_EST = { vacio: "Sin cable", ilegible: "Cable sin marquilla" };
 const CLAVES = ["n", "obs"];
 for (let i = 0; i < 4; i++) for (const c of CAMPOS) CLAVES.push(i + "." + c);
+const CLAVES_INV = ["obs"];
+for (let pv = 1; pv <= PV_TOTAL; pv++) for (const c of CAMPOS_PV) CLAVES_INV.push(pv + "." + c);
+
+const esInv = id => /\.INV\d+$/.test(id);
+const idInv = (sc, inv) => `${sc}.INV${pad(inv)}`;
+const numInv = id => +id.slice(id.lastIndexOf("INV") + 3);
+const clavesDe = id => esInv(id) ? CLAVES_INV : CLAVES;
+const existeId = id => existeTracker(id) || (esInv(id) && !!window.TRACKERS[id.split(".")[0]] && numInv(id) >= 1 && numInv(id) <= INVERSORES);
+const nombreId = id => esInv(id) ? fmtInv(numInv(id)) : nomTr(id);
+const prefSC = sc => prefTr(window.TRACKERS[sc][0]);
+const registroVacio = id => esInv(id) ? { p: {}, obs: "", ts: {} } : { n: nStrings(id), s: [], obs: "", ts: {} };
 
 function leerCampo(r, k) {
   if (!r) return "";
   if (k === "n") return r.n || "";
   if (k === "obs") return r.obs || "";
   const [i, c] = k.split(".");
-  return r.s?.[+i]?.[c] ?? "";
+  return (CAMPOS_PV.includes(c) ? r.p?.[i]?.[c] : r.s?.[+i]?.[c]) ?? "";
 }
 function escribirCampo(r, k, v) {
   if (k === "n") r.n = v;
   else if (k === "obs") r.obs = v;
   else {
     const [i, c] = k.split(".");
+    if (CAMPOS_PV.includes(c)) { r.p ||= {}; (r.p[i] ||= {})[c] = v; return; }
     r.s ||= [];
     for (let j = 0; j <= +i; j++) r.s[j] ||= {};
     r.s[+i][c] = v;
   }
 }
-const valoresDe = r => Object.fromEntries(CLAVES.map(k => [k, leerCampo(r, k)]));
+const valoresDe = (r, id) => Object.fromEntries(clavesDe(id).map(k => [k, leerCampo(r, k)]));
 function txtValor(k, v) {
   if (v === "" || v == null) return "—";
   const c = k.split(".")[1];
-  if (c === "mTr") return fmtTr(v);
-  if (c === "mInv" || c === "inv") return fmtInv(v);
-  if (c === "mStr") return "S" + v;
+  if (c === "mTr" || c === "mt") return fmtTr(v);
+  if (c === "mInv" || c === "inv" || c === "mi") return fmtInv(v);
+  if (c === "mStr" || c === "ms") return "S" + v;
   if (c === "ent") return fmtPV(v);
+  if (c === "est") return TXT_EST[v] || v;
   return String(v);
 }
-const txtClave = k => k === "n" ? "Nº strings" : k === "obs" ? "Observaciones" : `S${+k.split(".")[0] + 1} ${TXT_CAMPO[k.split(".")[1]]}`;
+function txtClave(k) {
+  if (k === "n") return "Nº strings";
+  if (k === "obs") return "Observaciones";
+  const [i, c] = k.split(".");
+  return CAMPOS_PV.includes(c) ? `${fmtPV(i)} ${TXT_CAMPO[c]}` : `S${+i + 1} ${TXT_CAMPO[c]}`;
+}
 
-// Cambia campos de un tracker ({"n": 2, "0.mInv": 3, ...}); solo marca hora en los que cambian.
+// Cambia campos de un tracker ({"n": 2, "0.mInv": 3, ...}) o de un inversor ({"5.mt": 85, ...}); solo marca hora en los que cambian.
 // Devuelve {id, antes} si hubo cambios. Usar siempre dentro de transaccion().
 function aplicar(id, cambios) {
   const antes = clonar(registros[id] || null);
-  const r = registros[id] ||= { n: nStrings(id), s: [], obs: "", ts: {} };
+  const r = registros[id] ||= registroVacio(id);
   r.ts ||= {};
   const t = new Date().toISOString();
   let hubo = false;
@@ -432,14 +460,53 @@ function transaccion(meta, fn) {
   return entrada;
 }
 
-// Un tracker sin ningún dato cuenta como pendiente (ej. después de borrar o deshacer)
-const tieneDatos = r => !!r && (!!r.obs || (r.s || []).some(s => s && CAMPOS.some(c => s[c])));
+// Un registro sin ningún dato cuenta como pendiente (ej. después de borrar o deshacer)
+const tieneDatos = r => !!r && (!!r.obs || (r.s || []).some(s => s && CAMPOS.some(c => s[c])) ||
+  Object.values(r.p || {}).some(x => x && CAMPOS_PV.some(c => x[c])));
 const levantado = s => !!(s && s.mTr && s.mInv && s.mStr);
-const conectado = s => !!(s && s.inv && s.ent);
+const pvLeido = x => !!(x && (x.est || (x.mt && x.mi && x.ms)));
+const pvMarquilla = x => !!(x && !x.est && x.mt && x.mi && x.ms);
+const claveM = (t, i, n) => `${t}|${i}|${n}`;
+const txtMarquilla = (sc, x) => `${fmtTr(x.mt, prefSC(sc))} · ${fmtInv(x.mi)} · S${x.ms}`;
+
+// ---------- Cruce tracker ↔ inversor ----------
+// Une la marquilla leída en el tracker con la misma marquilla leída en el inversor (tracker + inversor + string)
+const cacheCruce = {};
+function cruce(sc) {
+  const c = cacheCruce[sc];
+  if (c && c.ver === verDatos) return c;
+  const enTr = {}, enInv = {}, invLeidos = {};
+  for (const t of window.TRACKERS[sc]) {
+    const id = sc + "." + t, r = registros[id]; if (!r) continue;
+    for (let i = 0; i < nStrings(id); i++) {
+      const s = r.s?.[i];
+      if (levantado(s)) (enTr[claveM(s.mTr, s.mInv, s.mStr)] ||= []).push({ id, t, i });
+    }
+  }
+  for (let inv = 1; inv <= INVERSORES; inv++) {
+    const r = registros[idInv(sc, inv)]; let leidos = 0;
+    for (let pv = 1; pv <= PV_TOTAL; pv++) {
+      const x = r?.p?.[pv];
+      if (PV_HABITUALES.has(pv) && pvLeido(x)) leidos++;
+      if (pvMarquilla(x)) (enInv[claveM(x.mt, x.mi, x.ms)] ||= []).push({ inv, pv });
+    }
+    invLeidos[inv] = leidos;
+  }
+  return (cacheCruce[sc] = { ver: verDatos, enTr, enInv, invLeidos });
+}
+// Un inversor está levantado cuando sus 20 PV habituales tienen marquilla o "sin cable"
+const invCompleto = (cx, inv) => (cx.invLeidos[inv] || 0) >= PV_HABITUALES.size;
+// Dónde se encontró en los inversores el string i del tracker
+function ubicacion(sc, id, i, cx = cruce(sc)) {
+  const s = registros[id]?.s?.[i];
+  return levantado(s) ? cx.enInv[claveM(s.mTr, s.mInv, s.mStr)] || [] : [];
+}
+// En qué trackers se anotó la marquilla de un PV
+const origen = (cx, x) => pvMarquilla(x) ? cx.enTr[claveM(x.mt, x.mi, x.ms)] || [] : [];
 
 function avance(id) {
-  const r = registros[id], n = nStrings(id); let lev = 0, con = 0;
-  for (let i = 0; i < n; i++) { const s = r?.s?.[i]; if (levantado(s)) lev++; if (conectado(s)) con++; }
+  const r = registros[id], n = nStrings(id), sc = id.split(".")[0], cx = cruce(sc); let lev = 0, con = 0;
+  for (let i = 0; i < n; i++) { if (levantado(r?.s?.[i])) lev++; if (ubicacion(sc, id, i, cx).length) con++; }
   return { n, lev, con };
 }
 function estado(id) {
@@ -455,24 +522,11 @@ function resumenSC(sc) {
   return { total: ts.length, c, p };
 }
 
-// Ocupación de un subcampo: "inv|pv" -> lista de {id, i} (tracker y string conectados ahí)
-function ocupacion(sc) {
-  const m = {};
-  for (const [id, r] of Object.entries(registros)) {
-    if (!id.startsWith(sc + ".")) continue;
-    for (let i = 0; i < (r.n || 4); i++) {
-      const s = r.s?.[i];
-      if (conectado(s)) (m[s.inv + "|" + s.ent] ||= []).push({ id, i });
-    }
-  }
-  return m;
-}
-
-// Marquillas del subcampo: "mInv|mStr" -> lista de {id, i} que la tienen anotada
+// Marquillas anotadas en los trackers del subcampo: "mInv|mStr" -> lista de {id, i}
 function marquillas(sc) {
   const m = {};
   for (const [id, r] of Object.entries(registros)) {
-    if (!id.startsWith(sc + ".")) continue;
+    if (!id.startsWith(sc + ".") || esInv(id)) continue;
     for (let i = 0; i < (r.n || 4); i++) {
       const s = r.s?.[i];
       if (s && s.mInv && s.mStr) (m[s.mInv + "|" + s.mStr] ||= []).push({ id, i });
@@ -481,36 +535,107 @@ function marquillas(sc) {
   return m;
 }
 
-// Diferencias encontradas en un tracker
-function novedades(id, ocup, marq) {
+// Novedades de un tracker: lo que dice su marquilla contra el tracker real, el inversor donde se encontró y el diseño
+function novedades(id, cx, marq) {
   const r = registros[id]; if (!tieneDatos(r)) return [];
-  const [sc, t] = id.split("."), real = numTr(t), out = [];
-  ocup ||= ocupacion(sc); marq ||= marquillas(sc);
-  const d = diseno(id);
-  for (let i = 0; i < (r.n || 4); i++) {
+  const [sc, t] = id.split("."), real = numTr(t), out = [], d = diseno(id);
+  cx ||= cruce(sc); marq ||= marquillas(sc);
+  for (let i = 0; i < nStrings(id); i++) {
     const s = r.s?.[i]; if (!s) continue;
     const S = "S" + (i + 1), dueno = marquillaFueraDeDiseno(sc, t, s);
     if (s.mTr && s.mTr !== real) out.push({ i, txt: `${S}: la marquilla dice tracker ${fmtTr(s.mTr, prefTr(t))}` });
     if (dueno) out.push({ i, diseno: true, txt: `${S}: la marquilla dice ${fmtInv(s.mInv)} S${s.mStr}, que según el diseño es de ${dueno.t}` +
       (s.mTr === real && d ? ` (este tracker va a ${fmtDis(d)})` : "") });
-    if (conectado(s) && d && s.inv !== d.inv) out.push({ i, diseno: true, txt: `${S}: conectado en ${fmtInv(s.inv)}, pero según el diseño este tracker va a ${fmtInv(d.inv)}` });
-    if (s.mInv && s.inv && s.mInv !== s.inv) out.push({ i, txt: `${S}: la marquilla dice ${fmtInv(s.mInv)} pero está conectado en ${fmtInv(s.inv)}` });
-    if (conectado(s) && !PV_HABITUALES.has(s.ent)) out.push({ i, txt: `${S}: conectado en ${fmtInv(s.inv)} ${fmtPV(s.ent)}, que normalmente va vacío` });
-    if (s.mInv && s.mStr && (marq[s.mInv + "|" + s.mStr] || []).length > 1) out.push({ i, txt: `${S}: marquilla ${fmtInv(s.mInv)} string ${s.mStr} repetida en otro string del subcampo` });
-    if (conectado(s) && (ocup[s.inv + "|" + s.ent] || []).length > 1) out.push({ i, txt: `${S}: ${fmtInv(s.inv)} ${fmtPV(s.ent)} tiene más de un string` });
+    if (s.mInv && s.mStr && (marq[s.mInv + "|" + s.mStr] || []).length > 1) out.push({ i, txt: `${S}: marquilla ${fmtInv(s.mInv)} S${s.mStr} repetida en otro string del subcampo` });
+    if (!levantado(s)) continue;
+    const ub = ubicacion(sc, id, i, cx);
+    for (const u of ub) {
+      const donde = `${fmtInv(u.inv)} ${fmtPV(u.pv)}`;
+      if (u.inv !== s.mInv) out.push({ i, txt: `${S}: la marquilla dice ${fmtInv(s.mInv)}, pero el cable está en ${donde}` });
+      if (!PV_HABITUALES.has(u.pv)) out.push({ i, txt: `${S}: llega a ${donde}, que normalmente va vacío` });
+      if (d && u.inv !== d.inv) out.push({ i, diseno: true, txt: `${S}: llega a ${fmtInv(u.inv)}, pero según el diseño este tracker va a ${fmtInv(d.inv)}` });
+    }
+    if (ub.length > 1) out.push({ i, txt: `${S}: la misma marquilla está en ${ub.length} PV` });
+    if (!ub.length && invCompleto(cx, s.mInv)) out.push({ i, txt: `${S}: no se encontró en el ${fmtInv(s.mInv)} (inversor ya levantado)` });
   }
   return out;
 }
+
+// Revisión de un PV del inversor: novedades e información del cruce
+function revisarPV(sc, inv, pv, cx = cruce(sc)) {
+  const x = registros[idInv(sc, inv)]?.p?.[pv], hab = PV_HABITUALES.has(pv), novs = [], info = [], P = fmtPV(pv);
+  if (!pvLeido(x)) return { novs, info };
+  if (x.est === "vacio") {
+    if (hab) novs.push({ pv, txt: `${P}: sin cable (normalmente va conectado)` });
+    return { novs, info };
+  }
+  if (!hab) novs.push({ pv, txt: `${P}: tiene cable y normalmente va vacío` });
+  if (x.est === "ilegible") { novs.push({ pv, txt: `${P}: cable sin marquilla o ilegible` }); return { novs, info }; }
+  const pref = prefSC(sc), M = txtMarquilla(sc, x);
+  if (x.mi !== inv) novs.push({ pv, txt: `${P}: la marquilla dice ${fmtInv(x.mi)} (${M})` });
+  const otros = (cx.enInv[claveM(x.mt, x.mi, x.ms)] || []).filter(u => !(u.inv === inv && u.pv === pv));
+  if (otros.length) novs.push({ pv, txt: `${P}: la marquilla ${M} también está en ${otros.map(u => `${fmtInv(u.inv)} ${fmtPV(u.pv)}`).join(", ")}` });
+  const dueno = posDiseno(sc)[x.mi + "|" + x.ms];
+  if (dueno && numTr(dueno.t) !== x.mt) novs.push({ pv, diseno: true, txt: `${P}: según el diseño, ${fmtInv(x.mi)} S${x.ms} es de ${dueno.t}, no de ${fmtTr(x.mt, pref)}` });
+  const org = origen(cx, x);
+  for (const o of org) {
+    info.push(`Tracker real: <a href="#/t/${esc(o.id)}">${esc(o.t)} S${o.i + 1}</a> ` +
+      (numTr(o.t) !== x.mt ? `<span class="warn">(marquilla de otro tracker)</span>` : `<span class="ok">✓ coincide con el tracker</span>`));
+    const d = diseno(o.id);
+    if (d && d.inv !== inv) novs.push({ pv, diseno: true, txt: `${P}: llega ${o.t} S${o.i + 1}, que según el diseño va a ${fmtInv(d.inv)}` });
+  }
+  if (!org.length) {
+    const t = window.TRACKERS[sc].find(y => numTr(y) === x.mt), a = t && avance(sc + "." + t);
+    if (!t) novs.push({ pv, txt: `${P}: la marquilla dice tracker ${fmtTr(x.mt, pref)}, que no existe en ${sc}` });
+    else if (a.lev === a.n) novs.push({ pv, txt: `${P}: ${M} no está anotada en ningún tracker (el ${t} ya se levantó y no la tiene)` });
+    else info.push(`<span class="muted">Falta levantar el tracker <a href="#/t/${esc(sc + "." + t)}">${esc(t)}</a> para comparar</span>`);
+  }
+  return { novs, info };
+}
+function novedadesInv(sc, inv, cx = cruce(sc)) {
+  const out = [];
+  for (let pv = 1; pv <= PV_TOTAL; pv++) out.push(...revisarPV(sc, inv, pv, cx).novs);
+  return out;
+}
+function estadoInversor(sc, inv, cx = cruce(sc)) {
+  const r = registros[idInv(sc, inv)], novs = novedadesInv(sc, inv, cx);
+  let cruzados = 0;
+  for (let pv = 1; pv <= PV_TOTAL; pv++) if (origen(cx, r?.p?.[pv]).length) cruzados++;
+  return { leidos: cx.invLeidos[inv] || 0, novs: novs.length, ajenos: novs.filter(n => n.diseno).length, cruzados };
+}
 function novedadesSC(sc) {
-  const ocup = ocupacion(sc), marq = marquillas(sc);
-  return window.TRACKERS[sc].reduce((a, t) => a + novedades(sc + "." + t, ocup, marq).length, 0);
+  const cx = cruce(sc), marq = marquillas(sc);
+  let n = window.TRACKERS[sc].reduce((a, t) => a + novedades(sc + "." + t, cx, marq).length, 0);
+  for (let inv = 1; inv <= INVERSORES; inv++) n += novedadesInv(sc, inv, cx).length;
+  return n;
 }
 
-// Une dos versiones del mismo tracker: por cada campo gana el cambio más reciente (incluye datos borrados)
-function fusionar(a, b) {
-  const out = { n: a.n || b.n || 4, s: [], obs: "", ts: {} }, dif = [];
+// Versión 2.x: la conexión (inv/ent) se guardaba en el tracker. Se pasa al inversor con la marquilla del string.
+function migrarLegado() {
+  const t0 = new Date().toISOString(), ids = new Set();
+  for (const [id, r] of Object.entries(registros)) {
+    if (esInv(id) || !existeTracker(id)) continue;
+    (r.s || []).forEach((s, i) => {
+      if (!s || !s.inv || !s.ent) return;
+      const sc = id.split(".")[0], iid = idInv(sc, s.inv), ri = registros[iid] ||= registroVacio(iid), d = diseno(id);
+      ri.ts ||= {};
+      if (!pvLeido(ri.p?.[s.ent])) {
+        const v = { mt: s.mTr || numTr(nomTr(id)), mi: s.mInv || s.inv, ms: s.mStr || (d ? d.desde + i : ""), est: "" };
+        for (const [c, val] of Object.entries(v)) { escribirCampo(ri, s.ent + "." + c, val); ri.ts[s.ent + "." + c] = t0; }
+        ri.tec ||= r.tec || ""; ri.fecha ||= r.fecha || "";
+        ids.add(iid);
+      }
+      s.inv = ""; s.ent = ""; r.ts ||= {}; r.ts[i + ".inv"] = t0; r.ts[i + ".ent"] = t0; ids.add(id);
+    });
+  }
+  if (ids.size) guardarRegistros([...ids]);
+}
+
+// Une dos versiones del mismo registro: por cada campo gana el cambio más reciente (incluye datos borrados)
+function fusionar(a, b, id) {
+  const out = esInv(id) ? { p: {}, obs: "", ts: {} } : { n: a.n || b.n || 4, s: [], obs: "", ts: {} }, dif = [];
   let maxA = "", maxB = "";
-  for (const k of CLAVES) {
+  for (const k of clavesDe(id)) {
     const ta = a.ts?.[k] || "", tb = b.ts?.[k] || "", va = leerCampo(a, k), vb = leerCampo(b, k);
     // Sin horas (datos antiguos o CSV) solo se rellenan campos vacíos
     const usarB = tb > ta || (!ta && !tb && va === "" && vb !== "");
@@ -545,19 +670,19 @@ function registrarHistorial(meta, porId) {
   escribir(K.hist, hist.slice(-MAX_HIST));
   return entrada;
 }
-function diferencias(antes, despues) {
-  const a = valoresDe(antes), d = valoresDe(despues);
-  return CLAVES.filter(k => a[k] !== d[k] && !(k === "n" && (!a[k] || !d[k])))
+function diferencias(antes, despues, id) {
+  const a = valoresDe(antes, id), d = valoresDe(despues, id);
+  return clavesDe(id).filter(k => a[k] !== d[k] && !(k === "n" && (!a[k] || !d[k])))
     .map(k => `${txtClave(k)}: ${txtValor(k, a[k])} → ${txtValor(k, d[k])}`);
 }
 function deshacer(entradaId) {
   const hist = leer(K.hist, []), e = hist.find(x => x.id === entradaId);
   if (!e || e.deshecho) return toast("Ese cambio ya se deshizo");
-  const posteriores = e.cambios.some(c => JSON.stringify(valoresDe(registros[c.id])) !== JSON.stringify(valoresDe(c.despues)));
-  if (posteriores && !confirm("Hubo cambios después de este en los mismos trackers. ¿Deshacer igual?")) return;
+  const posteriores = e.cambios.some(c => JSON.stringify(valoresDe(registros[c.id], c.id)) !== JSON.stringify(valoresDe(c.despues, c.id)));
+  if (posteriores && !confirm("Hubo cambios después de este en los mismos registros. ¿Deshacer igual?")) return;
   e.deshecho = true;
   escribir(K.hist, hist);
-  transaccion({ tipo: "deshacer", desc: "Deshacer: " + e.desc }, () => e.cambios.map(c => aplicar(c.id, valoresDe(c.antes))));
+  transaccion({ tipo: "deshacer", desc: "Deshacer: " + e.desc }, () => e.cambios.map(c => aplicar(c.id, valoresDe(c.antes, c.id))));
   toast("Cambio deshecho");
   refrescar();
 }
@@ -596,16 +721,18 @@ async function sincronizar(manual) {
     // Une lo que registraron los otros técnicos
     let recibidos = 0;
     for (const [id, rec] of Object.entries(j.registros || {})) {
-      if (!existeTracker(id) || !rec) continue;
-      const local = registros[id], unido = local ? fusionar(local, rec)[0] : rec;
+      if (!existeId(id) || !rec) continue;
+      const local = registros[id], unido = local ? fusionar(local, rec, id)[0] : rec;
       if (JSON.stringify(unido) !== JSON.stringify(local)) { registros[id] = unido; recibidos++; }
     }
+    verDatos++;
     escribir(K.reg, registros);
     escribir(K.sync, [...quedan]);
     escribir(K.syncDesde, j.ahora || 0);
     escribir(K.syncUlt, ahora());
     escribir(K.syncErr, "");
-    if (manual) toast(`Enviado a la oficina${recibidos ? ` · ${recibidos} tracker(s) actualizados de otros técnicos` : ""}`);
+    if (recibidos) migrarLegado();
+    if (manual) toast(`Enviado a la oficina${recibidos ? ` · ${recibidos} registro(s) actualizados de otros técnicos` : ""}`);
     if (recibidos) refrescarSiQuieto();
     return true;
   } catch (e) {
@@ -623,7 +750,7 @@ function pintarNube() {
   b.classList.remove("oculto");
   b.classList.toggle("error", !!err && n > 0);
   b.textContent = sincronizando ? "☁ …" : n ? `☁ ${n}` : "☁ ✓";
-  b.title = n ? `${n} tracker(s) por enviar a la oficina` : "Todo enviado a la oficina";
+  b.title = n ? `${n} registro(s) por enviar a la oficina` : "Todo enviado a la oficina";
 }
 window.addEventListener("online", () => sincronizar(false));
 setInterval(() => sincronizar(false), 60000);
@@ -667,7 +794,7 @@ function enrutar(mantenerScroll) {
   if ((m = h.match(/^\/inv\/([^/]+)\/(\d+)$/)) && window.TRACKERS[m[1]] && +m[2] >= 1 && +m[2] <= INVERSORES) return vistaInversor(m[1], +m[2]);
   if ((m = h.match(/^\/inv\/([^/]+)$/)) && window.TRACKERS[m[1]]) return vistaInversores(m[1]);
   if ((m = h.match(/^\/resumen\/(.+)$/)) && window.TRACKERS[m[1]]) return vistaResumen(m[1]);
-  if ((m = h.match(/^\/historial(?:\/(.+))?$/))) return vistaHistorial(m[1] && existeTracker(m[1]) ? m[1] : null);
+  if ((m = h.match(/^\/historial(?:\/(.+))?$/))) return vistaHistorial(m[1] && existeId(m[1]) ? m[1] : null);
   if (h === "/exportar") return vistaExportar();
   if (h === "/ajustes") return vistaAjustes();
   return vistaInicio();
@@ -755,12 +882,12 @@ function vistaSubcampo(sc) {
   const r = resumenSC(sc), nov = novedadesSC(sc);
   app.innerHTML = `
     <div class="card"><div class="stat"><span>Trackers completos</span><b>${r.c} / ${r.total}</b></div>
-      <div class="stat"><span>Novedades (marquillas que no coinciden)</span><b class="${nov ? "err" : ""}">${nov}</b></div>
+      <div class="stat"><span>Novedades (trackers e inversores)</span><b class="${nov ? "err" : ""}">${nov}</b></div>
       <div class="barra"><i class="c" style="width:${r.c / r.total * 100}%"></i><i class="p" style="width:${r.p / r.total * 100}%"></i></div>
-      <a class="btn enlace" href="#/inv/${esc(sc)}">Paso 2: en los ${INVERSORES} inversores</a>
+      <a class="btn enlace" href="#/inv/${esc(sc)}">Marquillas en los ${INVERSORES} inversores</a>
       <a class="btn sec enlace" href="#/resumen/${esc(sc)}">Resumen del subcampo</a></div>
-    <h2>Paso 1: en los trackers</h2>
-    <p class="muted" style="margin-top:-6px">M = marquillas anotadas · I = asociados en inversor</p>
+    <h2>Marquillas en los trackers</h2>
+    <p class="muted" style="margin-top:-6px">M = marquillas anotadas en el tracker · I = encontradas en el inversor</p>
     <div class="filtros"><input id="buscar" inputmode="numeric" placeholder="Número de tracker (ej. 85)"></div>
     <div class="chips">
       ${["todos", "pendiente", "parcial", "completo"].map(f =>
@@ -790,7 +917,7 @@ function vistaSubcampo(sc) {
   pintar();
 }
 
-// Paso 1, en el tracker: lo que dicen las marquillas de los cables de cada string
+// En el tracker: lo que dicen las marquillas de los cables de cada string
 function vistaFicha(sc, t) {
   const id = sc + "." + t, real = numTr(t), pref = prefTr(t);
   const lista = window.TRACKERS[sc], idx = lista.indexOf(t);
@@ -858,9 +985,9 @@ function vistaFicha(sc, t) {
   }
 
   function validar() {
-    const ocup = ocupacion(sc), marq = marquillas(sc);
+    const cx = cruce(sc), marq = marquillas(sc);
     strs.querySelectorAll(".str").forEach(div => {
-      const i = +div.dataset.i, s = registros[id]?.s?.[i] || {}, msgs = [];
+      const i = +div.dataset.i, msgs = [];
       const mTr = aNum(div.querySelector(".mTr").value), mInv = aNum(div.querySelector(".mInv").value), mStr = aNum(div.querySelector(".mStr").value);
       if (mTr && mTr !== real) msgs.push(`<span class="warn">⚠ La marquilla es de otro tracker: ${fmtTr(mTr, pref)}</span>`);
       const dueno = marquillaFueraDeDiseno(sc, t, { mTr, mInv, mStr });
@@ -868,13 +995,18 @@ function vistaFicha(sc, t) {
       else if (mTr && mInv && mStr && posDiseno(sc)[mInv + "|" + mStr]) msgs.push(`<span class="ok">✓ Coincide con el diseño</span>`);
       const rep = (marq[mInv + "|" + mStr] || []).filter(u => !(u.id === id && u.i === i));
       if (mInv && mStr && rep.length) msgs.push(`<span class="warn">⚠ ${fmtInv(mInv)} S${mStr} ya está anotada en ${rep.map(u => `${nomTr(u.id)} S${u.i + 1}`).join(", ")}</span>`);
-      if (conectado(s)) {
-        msgs.push(`<span class="ok">Conectado en ${fmtInv(s.inv)} · ${fmtPV(s.ent)}</span>`);
-        if (mInv && mInv !== s.inv) msgs.push(`<span class="err">⚠ La marquilla dice ${fmtInv(mInv)}</span>`);
-        if (dis && s.inv !== dis.inv) msgs.push(`<span class="err">⚠ Según el diseño va a ${fmtInv(dis.inv)}</span>`);
-        if (!PV_HABITUALES.has(s.ent)) msgs.push(`<span class="err">⚠ ${fmtPV(s.ent)} normalmente va vacío</span>`);
-        if ((ocup[s.inv + "|" + s.ent] || []).length > 1) msgs.push(`<span class="err">⚠ Ese PV tiene otro string</span>`);
-      } else msgs.push(`<span class="muted">Falta asociar en el inversor</span>`);
+      // Cruce con lo leído en los inversores
+      const ub = levantado({ mTr, mInv, mStr }) ? cx.enInv[claveM(mTr, mInv, mStr)] || [] : [];
+      for (const u of ub) {
+        msgs.push(`<span class="ok">En el inversor: <a href="#/inv/${esc(sc)}/${u.inv}">${fmtInv(u.inv)} · ${fmtPV(u.pv)}</a></span>`);
+        if (u.inv !== mInv) msgs.push(`<span class="err">⚠ Está en ${fmtInv(u.inv)}, la marquilla dice ${fmtInv(mInv)}</span>`);
+        if (dis && u.inv !== dis.inv) msgs.push(`<span class="err">⚠ Según el diseño va a ${fmtInv(dis.inv)}</span>`);
+        if (!PV_HABITUALES.has(u.pv)) msgs.push(`<span class="err">⚠ ${fmtPV(u.pv)} normalmente va vacío</span>`);
+      }
+      if (ub.length > 1) msgs.push(`<span class="err">⚠ Esta marquilla está en ${ub.length} PV</span>`);
+      if (!ub.length && mInv && mStr) msgs.push(invCompleto(cx, mInv)
+        ? `<span class="err">⚠ No se encontró en el ${fmtInv(mInv)} (inversor ya levantado)</span>`
+        : `<span class="muted">Falta levantar el ${fmtInv(mInv)} para comparar</span>`);
       div.querySelector(".info").innerHTML = msgs.join("<br>");
     });
     const e = estado(id), el = document.getElementById("estado");
@@ -882,7 +1014,7 @@ function vistaFicha(sc, t) {
     const inv1 = aNum(strs.querySelector(".mInv")?.value) || dis?.inv;
     const ir = document.getElementById("irInv");
     ir.href = inv1 ? `#/inv/${sc}/${inv1}` : `#/inv/${sc}`;
-    ir.textContent = inv1 ? `Ir al ${fmtInv(inv1)} (asociar PV)` : "Ir a los inversores";
+    ir.textContent = inv1 ? `Ir al ${fmtInv(inv1)}` : "Ir a los inversores";
     document.getElementById("borrar").style.display = tieneDatos(registros[id]) ? "" : "none";
   }
 
@@ -913,211 +1045,179 @@ function vistaFicha(sc, t) {
   pintarStrings();
 }
 
-// Paso 2, en el inversor: lista de los inversores del subcampo
+// En el inversor: lista de los inversores del subcampo
 function vistaInversores(sc) {
   cabecera("Inversores " + sc, "#/sc/" + sc);
-  const ocup = ocupacion(sc), esperados = {};
-  for (const t of window.TRACKERS[sc]) {
-    const r = registros[sc + "." + t]; if (!r) continue;
-    for (let i = 0; i < (r.n || 4); i++) { const s = r.s?.[i]; if (levantado(s)) esperados[s.mInv] = (esperados[s.mInv] || 0) + 1; }
-  }
+  const cx = cruce(sc);
   let total = 0;
   const filas = Array.from({ length: INVERSORES }, (_, k) => k + 1).map(inv => {
-    const e = estadoInversor(ocup, inv, sc);
-    total += e.usadas;
-    const alertas = [e.dup && `${e.dup} PV con dos strings`, e.fuera && `${e.fuera} en PV que normalmente va vacío`,
-      e.ajenos && `${e.ajenos} strings de trackers de otro inversor`].filter(Boolean);
+    const e = estadoInversor(sc, inv, cx);
+    total += e.leidos;
     return `<a class="sc" href="#/inv/${esc(sc)}/${inv}">
-      <div class="top"><span>${fmtInv(inv)}</span><span class="muted">${e.usadas}/${PV_HABITUALES.size} PV</span></div>
-      <div class="barra"><i class="c" style="width:${e.usadas / PV_HABITUALES.size * 100}%"></i></div>
-      <div class="muted" style="margin-top:6px">${esperados[inv] || 0} strings con marquilla de este inversor${alertas.length ? ` · <span class="err">${alertas.join(" · ")}</span>` : ""}</div>
+      <div class="top"><span>${fmtInv(inv)}</span><span class="muted">${e.leidos}/${PV_HABITUALES.size} PV</span></div>
+      <div class="barra"><i class="c" style="width:${e.leidos / PV_HABITUALES.size * 100}%"></i></div>
+      <div class="muted" style="margin-top:6px">${e.cruzados} coinciden con el tracker${e.novs ? ` · <span class="err">${e.novs} novedades</span>` : ""}</div>
     </a>`;
   }).join("");
   app.innerHTML = `
-    <div class="card"><div class="stat"><span>PV asociados en el subcampo</span><b>${total} / ${INVERSORES * PV_HABITUALES.size}</b></div></div>
+    <div class="card"><div class="stat"><span>PV habituales levantados en el subcampo</span><b>${total} / ${INVERSORES * PV_HABITUALES.size}</b></div></div>
     <div class="lista-sc">${filas}</div>`;
 }
-function estadoInversor(ocup, inv, sc) {
-  let usadas = 0, dup = 0, fuera = 0, ajenos = 0;
-  for (let e = 1; e <= PV_TOTAL; e++) {
-    const u = ocup[inv + "|" + e] || [];
-    if (u.length) PV_HABITUALES.has(e) ? usadas++ : fuera++;
-    if (u.length > 1) dup++;
-    ajenos += u.filter(x => { const d = diseno(x.id); return d && d.inv !== inv; }).length;
-  }
-  return { usadas, dup, fuera, ajenos };
-}
 
-// Cómo se lee un string en las listas: como su marquilla; si es de otro tracker se indica el real
-function etiquetaString({ s, t, i, id }) {
-  if (levantado(s)) return `${fmtTr(s.mTr, prefTr(t))} · S${s.mStr} · ${fmtInv(s.mInv)}`;
-  const d = id && diseno(id);
-  return d ? `${t} S${i + 1} · diseño ${fmtInv(d.inv)} S${d.desde + i} (sin marquilla)` : `${t} S${i + 1} (sin marquilla anotada)`;
-}
-
-// Conecta un string a un PV (o lo deja libre). Devuelve false si el técnico cancela.
-function asignarPV(sc, inv, pv, destino) {
-  if (destino) {
-    const s = registros[destino.id]?.s?.[destino.i];
-    if (conectado(s) && !(s.inv === inv && s.ent === pv) &&
-        !confirm(`Ese string ya está en ${fmtInv(s.inv)} ${fmtPV(s.ent)}. ¿Moverlo a ${fmtInv(inv)} ${fmtPV(pv)}?`)) return false;
-  }
-  const desc = destino ? `${fmtInv(inv)} ${fmtPV(pv)} ← ${nomTr(destino.id)} S${destino.i + 1}` : `${fmtInv(inv)} ${fmtPV(pv)} liberado`;
-  transaccion({ tipo: "pv", desc, snack: true }, () => {
-    const res = [];
-    for (const u of ocupacion(sc)[inv + "|" + pv] || [])
-      if (!destino || u.id !== destino.id || u.i !== destino.i) res.push(aplicar(u.id, { [u.i + ".inv"]: "", [u.i + ".ent"]: "" }));
-    if (destino) res.push(aplicar(destino.id, { [destino.i + ".inv"]: inv, [destino.i + ".ent"]: pv }));
-    return res;
-  });
-  return true;
-}
-
-// Paso 2, en el inversor: a cada PV se le asigna el string cuyo cable llega ahí
+// En el inversor: en cada PV se anota lo que dice la marquilla del cable que llega ahí
 function vistaInversor(sc, inv) {
   escribir(K.ultSc, sc); escribir(K.ultInv, inv);
   cabecera(`${fmtInv(inv)} · ${sc}`, "#/inv/" + sc);
-  const ocup = ocupacion(sc);
+  const cx = cruce(sc), id = idInv(sc, inv), r = registros[id], rev = {};
   let filas = "";
   for (const [m, desde, hasta] of MPPT_RANGOS) {
     filas += `<h2 class="mppt">MPPT${m}</h2>`;
     for (let pv = desde; pv <= hasta; pv++) {
-      const hab = PV_HABITUALES.has(pv), u = ocup[inv + "|" + pv] || [], msgs = [];
-      let txt = "— libre · toca para asignar —";
-      if (u[0]) {
-        const s = registros[u[0].id].s[u[0].i], t = nomTr(u[0].id);
-        txt = etiquetaString({ s, t, i: u[0].i, id: u[0].id });
-        if (!hab) msgs.push(`<span class="err">⚠ Novedad: este PV normalmente va vacío</span>`);
-        if (u.length > 1) msgs.push(`<span class="err">⚠ Hay ${u.length} strings en este PV: ${u.map(x => `${esc(nomTr(x.id))} S${x.i + 1}`).join(", ")}</span>`);
-        msgs.push(`Tracker real: <a href="#/t/${esc(u[0].id)}">${esc(t)} S${u[0].i + 1}</a>`);
-        if (s.mInv && s.mInv !== inv) msgs.push(`<span class="err">⚠ La marquilla dice ${fmtInv(s.mInv)}</span>`);
-        if (s.mTr && s.mTr !== numTr(t)) msgs.push(`<span class="warn">⚠ Marquilla de ${fmtTr(s.mTr, prefTr(t))}</span>`);
-        const d = diseno(u[0].id);
-        if (d && d.inv !== inv) msgs.push(`<span class="err">⚠ Según el diseño ${esc(t)} va a ${fmtInv(d.inv)}</span>`);
-        const dueno = marquillaFueraDeDiseno(sc, t, s);
-        if (dueno) msgs.push(`<span class="err">⚠ Según el diseño, ${fmtInv(s.mInv)} S${s.mStr} es de ${esc(dueno.t)}</span>`);
-      }
+      const hab = PV_HABITUALES.has(pv), x = r?.p?.[pv], rv = rev[pv] = revisarPV(sc, inv, pv, cx);
+      const txt = !pvLeido(x) ? (hab ? "— toca para anotar la marquilla —" : "— normalmente vacío —") : x.est ? TXT_EST[x.est] : txtMarquilla(sc, x);
+      const msgs = [...rv.novs.map(n => `<span class="err">⚠ ${esc(n.txt.replace(/^PV\d+: /, ""))}</span>`), ...rv.info];
       filas += `<div class="pv ${hab ? "" : "vacio"}" id="pv${pv}"><div class="n">${fmtPV(pv)}${hab ? "" : "<small>vacío</small>"}</div>
-        <div><button class="pv-btn ${u[0] ? "" : "libre"}" data-pv="${pv}">${esc(txt)}</button><div class="info">${msgs.join(" · ")}</div></div></div>`;
+        <div><button class="pv-btn ${pvLeido(x) ? "" : "libre"}" data-pv="${pv}">${esc(txt)}</button><div class="info">${msgs.join("<br>")}</div></div></div>`;
     }
   }
   const celda = pv => {
     if (pv === null) return `<i class="sep"></i>`;
-    const u = ocup[inv + "|" + pv] || [], hab = PV_HABITUALES.has(pv);
-    const ajeno = u.some(x => { const d = diseno(x.id); return d && d.inv !== inv; });
-    const cls = u.length > 1 || (u.length && !hab) || ajeno ? "c-err" : u.length ? "c-ok" : hab ? "c-falta" : "c-vacio";
+    const x = r?.p?.[pv], hab = PV_HABITUALES.has(pv);
+    const cls = rev[pv].novs.length ? "c-err" : !pvLeido(x) ? (hab ? "c-falta" : "c-vacio") : x.est === "vacio" ? "c-vacio" : "c-ok";
     return `<button class="${cls}" data-pv="${pv}" aria-label="${fmtPV(pv)}">${pv}</button>`;
   };
-  // Trackers que según el diseño llegan a este inversor, y dónde están realmente sus strings
+  const panel = PANEL.map(lado => `<div class="panel">${lado.arriba.map(celda).join("")}${lado.abajo.map(celda).join("")}</div>`).join("");
+  // Trackers que según el diseño llegan a este inversor, y cuántas de sus marquillas se leyeron aquí
+  const aquiPorTr = {};
+  for (const x of Object.values(r?.p || {})) if (pvMarquilla(x) && x.mi === inv) aquiPorTr[x.mt] = (aquiPorTr[x.mt] || 0) + 1;
   const delDiseno = Object.entries(window.DISENO[sc] || {}).filter(([, d]) => d[0] === inv).sort((a, b) => a[1][1] - b[1][1]);
   const filasDis = delDiseno.map(([t]) => {
-    const id = sc + "." + t, d = diseno(id), n = nStrings(id), r = registros[id];
-    let aqui = 0; const otros = [];
-    for (let i = 0; i < n; i++) {
-      const s = r?.s?.[i];
-      if (!conectado(s)) continue;
-      if (s.inv === inv) aqui++; else otros.push(`S${i + 1} en ${fmtInv(s.inv)} ${fmtPV(s.ent)}`);
-    }
+    const idT = sc + "." + t, d = diseno(idT), n = nStrings(idT), aqui = aquiPorTr[numTr(t)] || 0, otros = [];
+    for (let i = 0; i < n; i++) for (const u of ubicacion(sc, idT, i, cx)) if (u.inv !== inv) otros.push(`S${i + 1} en ${fmtInv(u.inv)} ${fmtPV(u.pv)}`);
     const cls = otros.length ? "err" : aqui === n ? "ok" : "muted";
-    return `<li><a href="#/t/${esc(id)}">${esc(t)}</a> · S${d.desde}${d.n > 1 ? " a S" + d.hasta : ""} · <span class="${cls}">${aqui}/${n} aquí</span>${otros.length ? ` · <span class="err">⚠ ${otros.join(", ")}</span>` : ""}</li>`;
+    return `<li><a href="#/t/${esc(idT)}">${esc(t)}</a> · S${d.desde}${d.n > 1 ? " a S" + d.hasta : ""} · <span class="${cls}">${aqui}/${n} marquillas aquí</span>${otros.length ? ` · <span class="err">⚠ ${otros.join(", ")}</span>` : ""}</li>`;
   }).join("");
-  const panel = PANEL.map(lado => `<div class="panel">${lado.arriba.map(celda).join("")}${lado.abajo.map(celda).join("")}</div>`).join("");
-  const e = estadoInversor(ocup, inv, sc);
+  const e = estadoInversor(sc, inv, cx);
   app.innerHTML = `
     <div class="card">
-      <div class="stat"><span>PV habituales conectados</span><b>${e.usadas} / ${PV_HABITUALES.size}</b></div>
+      <div class="stat"><span>PV habituales levantados</span><b>${e.leidos} / ${PV_HABITUALES.size}</b></div>
+      <div class="stat"><span>Coinciden con lo anotado en el tracker</span><b>${e.cruzados}</b></div>
+      <div class="stat"><span>Novedades</span><b class="${e.novs ? "err" : ""}">${e.novs}</b></div>
       ${panel}
-      <p class="muted"><span class="c-ok">●</span> conectado <span class="c-falta">●</span> falta <span class="c-err">●</span> novedad <span class="c-vacio">●</span> normalmente vacío</p>
-      <p class="muted">Toca un PV, escribe el número de tracker y de string de la marquilla (ej. <b>85 5</b>) y elige el string. Pasa solo al siguiente PV libre.</p>
+      <p class="muted"><span class="c-ok">●</span> anotado <span class="c-falta">●</span> falta <span class="c-err">●</span> novedad <span class="c-vacio">●</span> vacío</p>
+      <p class="muted">Toca un PV y escribe lo que dice la marquilla del cable: número de tracker y de string (ej. <b>85 5</b>). Si la marquilla dice otro inversor, cámbialo. Pasa solo al siguiente PV.</p>
     </div>
     ${delDiseno.length ? `<details class="card disenio-inv"${e.ajenos ? " open" : ""}>
-      <summary><b>Diseño: ${delDiseno.length} trackers deben llegar aquí</b>${e.ajenos ? ` · <span class="err">${e.ajenos} strings de otro inversor</span>` : ""}</summary>
+      <summary><b>Diseño: ${delDiseno.length} trackers deben llegar aquí</b>${e.ajenos ? ` · <span class="err">${e.ajenos} novedades contra el diseño</span>` : ""}</summary>
       <ul class="lista-nov">${filasDis}</ul></details>` : ""}
     <div class="card">${filas}</div>
+    <div class="card">
+      <label for="obsInv">Observaciones del inversor</label>
+      <textarea id="obsInv" rows="2">${esc(r?.obs || "")}</textarea>
+      <a class="btn sec enlace" href="#/historial/${esc(id)}">Historial de este inversor</a>
+    </div>
     <div class="nav-t">
       <button class="btn sec" id="ant" ${inv === 1 ? "disabled" : ""}>‹ ${inv > 1 ? fmtInv(inv - 1) : ""}</button>
       <button class="btn" id="sig" ${inv === INVERSORES ? "disabled" : ""}>${inv < INVERSORES ? fmtInv(inv + 1) : ""} ›</button>
     </div>`;
-  app.querySelectorAll("[data-pv]").forEach(b => b.onclick = () => abrirBuscador(sc, inv, +b.dataset.pv));
+  app.querySelectorAll("[data-pv]").forEach(b => b.onclick = () => abrirCaptura(sc, inv, +b.dataset.pv));
+  document.getElementById("obsInv").addEventListener("change", ev =>
+    transaccion({ tipo: "ficha:" + id, desc: `Observaciones ${fmtInv(inv)}` }, () => [aplicar(id, { obs: ev.target.value.trim() })]));
   document.getElementById("ant").onclick = () => location.replace(`#/inv/${sc}/${inv - 1}`);
   document.getElementById("sig").onclick = () => location.replace(`#/inv/${sc}/${inv + 1}`);
 }
 
-// ---------- Buscador de strings para un PV ----------
-// Busca por la marquilla: "85" = tracker 85, "85 5" = tracker 85 string 5. Sin texto: los que dicen este inversor y faltan.
-function buscarStrings(sc, inv, q) {
-  const nums = (q.match(/\d+/g) || []).map(Number), out = [];
-  for (const t of window.TRACKERS[sc]) {
-    const id = sc + "." + t, real = numTr(t), n = nStrings(id), d = diseno(id);
-    for (let i = 0; i < n; i++) {
-      const s = registros[id]?.s?.[i] || {};
-      const propio = levantado(s) ? s.mInv === inv : d?.inv === inv;
-      if (!nums.length) { if (!propio || conectado(s)) continue; }
-      else {
-        if (s.mTr !== nums[0] && real !== nums[0]) continue;
-        if (nums[1] && s.mStr !== nums[1] && !(!s.mStr && (d ? d.desde + i : i + 1) === nums[1])) continue;
-      }
-      out.push({ id, t, i, s, propio, nStr: s.mStr || (d && d.inv === inv ? d.desde + i : 99) });
-    }
-  }
-  const peso = x => (x.propio ? 0 : 2) + (conectado(x.s) ? 1 : 0);
-  out.sort((a, b) => peso(a) - peso(b) || a.nStr - b.nStr || numTr(a.t) - numTr(b.t) || a.i - b.i);
-  return out.slice(0, 40);
-}
-
+// ---------- Captura de la marquilla de un PV ----------
 const hoja = document.getElementById("hoja");
 function cerrarBuscador() { hoja.classList.remove("ver"); hoja.innerHTML = ""; }
 hoja.addEventListener("click", e => { if (e.target === hoja) cerrarBuscador(); });
 
-function abrirBuscador(sc, inv, pv) {
-  const hab = PV_HABITUALES.has(pv), actual = (ocupacion(sc)[inv + "|" + pv] || [])[0];
+// "85 5" = tracker 85, string 5 (el inversor es el elegido); "85 12 5" = tracker 85, inversor 12, string 5
+function leerMarquilla(q, invSel) {
+  const n = (q.match(/\d+/g) || []).map(Number);
+  if (n.length >= 3) return { mt: n[0], mi: n[1], ms: n[2] };
+  return { mt: n[0] || "", mi: invSel, ms: n[1] || "" };
+}
+
+function abrirCaptura(sc, inv, pv) {
+  const id = idInv(sc, inv), x = registros[id]?.p?.[pv] || {}, hab = PV_HABITUALES.has(pv), pref = prefSC(sc);
   hoja.innerHTML = `<div class="hoja-panel">
     <div class="hoja-top"><b>${fmtInv(inv)} · ${fmtPV(pv)}</b><button id="hCerrar" aria-label="Cerrar">✕</button></div>
-    ${hab ? "" : `<p class="err" style="margin-top:0">⚠ Este PV normalmente va vacío. Si tiene un cable, quedará como novedad.</p>`}
-    ${actual ? `<p class="muted" style="margin-top:0">Ahora: <b>${esc(etiquetaString({ s: registros[actual.id].s[actual.i], t: nomTr(actual.id), i: actual.i, id: actual.id }))}</b></p>` : ""}
+    ${hab ? "" : `<p class="err" style="margin-top:0">⚠ Este PV normalmente va vacío. Si tiene cable, quedará como novedad.</p>`}
+    ${pvLeido(x) ? `<p class="muted" style="margin-top:0">Anotado: <b>${esc(x.est ? TXT_EST[x.est] : txtMarquilla(sc, x))}</b></p>` : ""}
     <label for="hQ">Marquilla del cable: tracker y string</label>
-    <input id="hQ" inputmode="tel" autocomplete="off" placeholder="Ej. 85 5">
-    <label class="check"><input type="checkbox" id="hAuto" ${leer(K.auto, true) ? "checked" : ""}>Pasar solo al siguiente PV libre</label>
-    <div id="hRes"></div>
-    ${actual ? `<button class="btn peligro" id="hLibre">Dejar ${fmtPV(pv)} libre</button>` : ""}
+    <input id="hQ" inputmode="tel" autocomplete="off" placeholder="Ej. 85 5" value="${pvMarquilla(x) ? `${x.mt} ${x.ms}` : ""}">
+    <div class="directo">
+      <div><label for="hInv">Inversor de la marquilla</label><select id="hInv">${Array.from({ length: INVERSORES }, (_, k) => k + 1)
+        .map(v => `<option value="${v}" ${v === (pvMarquilla(x) ? x.mi : inv) ? "selected" : ""}>${fmtInv(v)}</option>`).join("")}</select></div>
+      <button class="btn" id="hOk">Guardar</button>
+    </div>
+    <div id="hRes" class="info" style="margin-top:8px"></div>
+    <div class="nav-t" style="margin-top:10px">
+      <button class="btn sec" id="hVacio">Sin cable</button>
+      <button class="btn sec" id="hIleg">Sin marquilla</button>
+    </div>
+    <label class="check"><input type="checkbox" id="hAuto" ${leer(K.auto, true) ? "checked" : ""}>Pasar solo al siguiente PV</label>
+    ${pvLeido(x) ? `<button class="btn peligro" id="hBorrar">Borrar lo anotado en ${fmtPV(pv)}</button>` : ""}
   </div>`;
   hoja.classList.add("ver");
-  const q = document.getElementById("hQ"), res = document.getElementById("hRes");
-  let lista = [];
+  const q = document.getElementById("hQ"), sel = document.getElementById("hInv"), res = document.getElementById("hRes");
+  const actual = () => leerMarquilla(q.value, +sel.value);
+
   function pintar() {
-    lista = buscarStrings(sc, inv, q.value);
-    const vacio = !q.value.trim();
-    res.innerHTML = (vacio ? `<p class="muted">Strings de ${fmtInv(inv)} (por marquilla o por diseño) que faltan por conectar:</p>` : "") +
-      (lista.length ? lista.map((x, k) => {
-        const notas = [];
-        if (levantado(x.s) && x.s.mTr !== numTr(x.t)) notas.push(`<span class="warn">Tracker real ${esc(x.t)} S${x.i + 1}</span>`);
-        else notas.push(`Tracker real ${esc(x.t)} S${x.i + 1}`);
-        if (x.s.mInv && x.s.mInv !== inv) notas.push(`<span class="err">marquilla de ${fmtInv(x.s.mInv)}</span>`);
-        const d = diseno(x.id);
-        if (d && d.inv !== inv) notas.push(`<span class="err">diseño: ${fmtInv(d.inv)}</span>`);
-        if (conectado(x.s)) notas.push(`ya en ${fmtInv(x.s.inv)} ${fmtPV(x.s.ent)}`);
-        return `<button class="res ${x.propio ? "propio" : ""}" data-k="${k}"><b>${esc(etiquetaString(x))}</b><small>${notas.join(" · ")}</small></button>`;
-      }).join("") : `<p class="muted">${vacio ? "No hay pendientes con esa marquilla. Escribe el número de tracker." : "Sin resultados para esa marquilla."}</p>`);
-    res.querySelectorAll(".res").forEach(b => b.onclick = () => elegir(lista[+b.dataset.k]));
+    const m = actual();
+    if (q.value.match(/\d+/g)?.length >= 3) sel.value = m.mi;
+    if (!m.mt) { res.innerHTML = `<span class="muted">Escribe el número de tracker y de string que dice la marquilla.</span>`; return; }
+    const t = window.TRACKERS[sc].find(y => numTr(y) === m.mt), msgs = [];
+    if (!t) msgs.push(`<span class="err">⚠ No existe el tracker ${m.mt} en ${esc(sc)}</span>`);
+    if (!m.ms) msgs.push(`<span class="muted">Falta el número de string (ej. ${m.mt} 5)</span>`);
+    else if (m.ms > ENTRADAS) msgs.push(`<span class="err">⚠ El string va de 1 a ${ENTRADAS}</span>`);
+    if (t && m.ms && m.ms <= ENTRADAS) {
+      const M = txtMarquilla(sc, m), cx = cruce(sc), k = claveM(m.mt, m.mi, m.ms);
+      msgs.unshift(`<b>${esc(M)}</b>`);
+      if (m.mi !== inv) msgs.push(`<span class="warn">⚠ La marquilla dice otro inversor: quedará como novedad</span>`);
+      const dueno = posDiseno(sc)[m.mi + "|" + m.ms];
+      if (dueno) msgs.push(numTr(dueno.t) === m.mt ? `<span class="ok">✓ Coincide con el diseño (${esc(dueno.t)} S${dueno.i + 1})</span>`
+        : `<span class="err">⚠ Según el diseño, ${fmtInv(m.mi)} S${m.ms} es de ${esc(dueno.t)}</span>`);
+      const org = cx.enTr[k] || [];
+      msgs.push(org.length ? org.map(o => `<span class="ok">✓ Anotada en el tracker ${esc(o.t)} S${o.i + 1}</span>`).join("<br>")
+        : `<span class="muted">Aún no está anotada en ningún tracker</span>`);
+      const otros = (cx.enInv[k] || []).filter(u => !(u.inv === inv && u.pv === pv));
+      if (otros.length) msgs.push(`<span class="err">⚠ Ya está anotada en ${otros.map(u => `${fmtInv(u.inv)} ${fmtPV(u.pv)}`).join(", ")}</span>`);
+    }
+    res.innerHTML = msgs.join("<br>");
   }
-  function elegir(x) {
-    if (!asignarPV(sc, inv, pv, x ? { id: x.id, i: x.i } : null)) return;
+
+  function guardar(valores, desc) {
+    const cambios = {};
+    for (const c of CAMPOS_PV) cambios[pv + "." + c] = valores[c] ?? "";
+    transaccion({ tipo: "pv", desc: `${fmtInv(inv)} ${fmtPV(pv)}: ${desc}`, snack: true }, () => [aplicar(id, cambios)]);
     const auto = document.getElementById("hAuto").checked;
     escribir(K.auto, auto);
     refrescar();
-    if (!x || !auto) return cerrarBuscador();
-    // Siguiente PV habitual sin cable, en orden
-    const ocup = ocupacion(sc), orden = [...PV_HABITUALES].sort((a, b) => a - b);
-    const sig = [...orden.filter(p => p > pv), ...orden.filter(p => p < pv)].find(p => !(ocup[inv + "|" + p] || []).length);
-    if (!sig) { cerrarBuscador(); return toast(`${fmtInv(inv)}: todos los PV habituales tienen string`); }
+    if (!auto || !pvLeido(valores)) return cerrarBuscador();
+    // Siguiente PV habitual sin anotar, en orden
+    const p = registros[id]?.p || {}, orden = [...PV_HABITUALES].sort((a, b) => a - b);
+    const sig = [...orden.filter(v => v > pv), ...orden.filter(v => v < pv)].find(v => !pvLeido(p[v]));
+    if (!sig) { cerrarBuscador(); return toast(`${fmtInv(inv)}: todos los PV habituales anotados`); }
     document.getElementById("pv" + sig)?.scrollIntoView({ block: "center" });
-    abrirBuscador(sc, inv, sig);
+    abrirCaptura(sc, inv, sig);
+  }
+  function ok() {
+    const m = actual();
+    if (!window.TRACKERS[sc].some(y => numTr(y) === m.mt)) return toast(m.mt ? `No existe el tracker ${m.mt} en ${sc}` : "Escribe el número de tracker");
+    if (!m.ms || m.ms > ENTRADAS) return toast(`Escribe el número de string (1 a ${ENTRADAS})`);
+    guardar({ ...m, est: "" }, txtMarquilla(sc, m));
   }
   q.addEventListener("input", pintar);
-  q.addEventListener("keydown", e => { if (e.key === "Enter" && lista.length) elegir(lista[0]); });
+  sel.addEventListener("change", pintar);
+  q.addEventListener("keydown", e => { if (e.key === "Enter") ok(); });
+  document.getElementById("hOk").onclick = ok;
+  document.getElementById("hVacio").onclick = () => guardar({ est: "vacio" }, TXT_EST.vacio);
+  document.getElementById("hIleg").onclick = () => guardar({ est: "ilegible" }, TXT_EST.ilegible);
   document.getElementById("hAuto").onchange = e => escribir(K.auto, e.target.checked);
   document.getElementById("hCerrar").onclick = cerrarBuscador;
-  if (actual) document.getElementById("hLibre").onclick = () => elegir(null);
+  if (pvLeido(x)) document.getElementById("hBorrar").onclick = () => guardar({}, "borrado");
   pintar();
   q.focus();
 }
@@ -1125,24 +1225,24 @@ function abrirBuscador(sc, inv, pv) {
 // ---------- Resumen por subcampo ----------
 function vistaResumen(sc) {
   cabecera("Resumen " + sc, "#/sc/" + sc);
-  const ocup = ocupacion(sc), marq = marquillas(sc), esperados = {};
-  let nS = 0, lev = 0, con = 0;
-  const cuenta = { completo: 0, parcial: 0, pendiente: 0 }, novs = [], pend = [];
+  const cx = cruce(sc), marq = marquillas(sc);
+  let nS = 0, lev = 0, con = 0, pvLev = 0;
+  const cuenta = { completo: 0, parcial: 0, pendiente: 0 }, novT = [], novI = [], pend = [];
   for (const t of window.TRACKERS[sc]) {
     const id = sc + "." + t, a = avance(id), e = estado(id);
     nS += a.n; lev += a.lev; con += a.con; cuenta[e]++;
     if (e !== "completo") pend.push({ id, t, a, e });
-    for (const nv of novedades(id, ocup, marq)) novs.push({ id, t, ...nv });
-    const r = registros[id];
-    for (let i = 0; i < (r?.n || 0); i++) { const s = r.s?.[i]; if (levantado(s)) esperados[s.mInv] = (esperados[s.mInv] || 0) + 1; }
+    for (const nv of novedades(id, cx, marq)) novT.push({ id, t, ...nv });
   }
   const total = window.TRACKERS[sc].length;
   const filasInv = Array.from({ length: INVERSORES }, (_, k) => k + 1).map(inv => {
-    const e = estadoInversor(ocup, inv, sc);
-    return `<tr><td><a href="#/inv/${esc(sc)}/${inv}">${fmtInv(inv)}</a></td><td>${e.usadas}/${PV_HABITUALES.size}</td>
-      <td>${esperados[inv] || 0}</td><td class="${e.fuera ? "err" : ""}">${e.fuera}</td><td class="${e.dup ? "err" : ""}">${e.dup}</td>
-      <td class="${e.ajenos ? "err" : ""}">${e.ajenos}</td></tr>`;
+    const e = estadoInversor(sc, inv, cx);
+    pvLev += e.leidos;
+    for (const nv of novedadesInv(sc, inv, cx)) novI.push({ inv, ...nv });
+    return `<tr><td><a href="#/inv/${esc(sc)}/${inv}">${fmtInv(inv)}</a></td><td>${e.leidos}/${PV_HABITUALES.size}</td>
+      <td>${e.cruzados}</td><td class="${e.novs ? "err" : ""}">${e.novs}</td><td class="${e.ajenos ? "err" : ""}">${e.ajenos}</td></tr>`;
   }).join("");
+  const nDis = novT.filter(x => x.diseno).length + novI.filter(x => x.diseno).length;
   app.innerHTML = `
     <div class="card">
       <h2>Subcampo ${esc(sc)}</h2>
@@ -1150,38 +1250,43 @@ function vistaResumen(sc) {
       <div class="stat"><span>Trackers completos</span><b>${cuenta.completo} / ${total}</b></div>
       <div class="stat"><span>Trackers incompletos</span><b>${cuenta.parcial}</b></div>
       <div class="stat"><span>Trackers sin visitar</span><b>${cuenta.pendiente}</b></div>
-      <div class="stat"><span>Strings con marquilla anotada</span><b>${lev} / ${nS}</b></div>
-      <div class="stat"><span>Strings asociados en inversor</span><b>${con} / ${nS}</b></div>
-      <div class="stat"><span>Novedades</span><b class="${novs.length ? "err" : ""}">${novs.length}</b></div>
-      <div class="stat"><span>· de ellas, contra el diseño</span><b class="${novs.some(x => x.diseno) ? "err" : ""}">${novs.filter(x => x.diseno).length}</b></div>
+      <div class="stat"><span>Strings con marquilla anotada en el tracker</span><b>${lev} / ${nS}</b></div>
+      <div class="stat"><span>PV habituales anotados en los inversores</span><b>${pvLev} / ${INVERSORES * PV_HABITUALES.size}</b></div>
+      <div class="stat"><span>Strings cruzados (tracker = inversor)</span><b>${con} / ${nS}</b></div>
+      <div class="stat"><span>Novedades en trackers</span><b class="${novT.length ? "err" : ""}">${novT.length}</b></div>
+      <div class="stat"><span>Novedades en inversores</span><b class="${novI.length ? "err" : ""}">${novI.length}</b></div>
+      <div class="stat"><span>· de ellas, contra el diseño</span><b class="${nDis ? "err" : ""}">${nDis}</b></div>
       <button class="btn no-imprimir" id="imprimir">Imprimir / guardar PDF</button>
     </div>
     <div class="card">
       <h2>Avance por inversor</h2>
-      <table class="tabla"><thead><tr><th>Inversor</th><th>PV conectados</th><th>Marquillas</th><th>PV no habitual</th><th>PV doble</th><th>Fuera de diseño</th></tr></thead>
+      <table class="tabla"><thead><tr><th>Inversor</th><th>PV anotados</th><th>Coinciden con tracker</th><th>Novedades</th><th>Contra diseño</th></tr></thead>
       <tbody>${filasInv}</tbody></table>
-      <p class="muted">Marquillas = strings cuya marquilla dice ese inversor. Fuera de diseño = strings conectados ahí cuyo tracker, según el diseño, va a otro inversor.</p>
     </div>
     <div class="card">
-      <h2>Novedades (${novs.length})</h2>
-      ${novs.length ? `<ul class="lista-nov">${novs.map(x => `<li><a href="#/t/${esc(x.id)}">${esc(x.t)}</a> ${esc(x.txt)}</li>`).join("")}</ul>` : `<p class="muted">Sin novedades.</p>`}
+      <h2>Novedades en trackers (${novT.length})</h2>
+      ${novT.length ? `<ul class="lista-nov">${novT.map(x => `<li><a href="#/t/${esc(x.id)}">${esc(x.t)}</a> ${esc(x.txt)}</li>`).join("")}</ul>` : `<p class="muted">Sin novedades.</p>`}
+    </div>
+    <div class="card">
+      <h2>Novedades en inversores (${novI.length})</h2>
+      ${novI.length ? `<ul class="lista-nov">${novI.map(x => `<li><a href="#/inv/${esc(sc)}/${x.inv}">${fmtInv(x.inv)}</a> ${esc(x.txt)}</li>`).join("")}</ul>` : `<p class="muted">Sin novedades.</p>`}
     </div>
     <div class="card">
       <h2>Trackers por terminar (${pend.length})</h2>
-      ${pend.length ? `<ul class="lista-nov">${pend.map(x => `<li><a href="#/t/${esc(x.id)}">${esc(x.t)}</a> · ${TXT_ESTADO[x.e]} · marquillas ${x.a.lev}/${x.a.n} · inversor ${x.a.con}/${x.a.n}</li>`).join("")}</ul>` : `<p class="muted">Todos completos.</p>`}
+      ${pend.length ? `<ul class="lista-nov">${pend.map(x => `<li><a href="#/t/${esc(x.id)}">${esc(x.t)}</a> · ${TXT_ESTADO[x.e]} · marquillas ${x.a.lev}/${x.a.n} · en inversor ${x.a.con}/${x.a.n}</li>`).join("")}</ul>` : `<p class="muted">Todos completos.</p>`}
     </div>`;
   document.getElementById("imprimir").onclick = () => window.print();
 }
 
 // ---------- Historial ----------
 function vistaHistorial(filtro) {
-  cabecera(filtro ? "Historial " + nomTr(filtro) : "Historial", filtro ? "#/t/" + filtro : "#/ajustes");
+  cabecera(filtro ? "Historial " + nombreId(filtro) : "Historial", !filtro ? "#/ajustes" : esInv(filtro) ? `#/inv/${filtro.split(".")[0]}/${numInv(filtro)}` : "#/t/" + filtro);
   const hist = leer(K.hist, []).filter(e => !filtro || e.cambios.some(c => c.id === filtro)).reverse();
   app.innerHTML = `
     <div class="card">
       <p class="muted" style="margin-top:0">Cambios hechos en este teléfono (últimos ${MAX_HIST}). Deshacer devuelve los datos a como estaban antes de ese cambio.</p>
       ${hist.length ? hist.map(e => {
-        const lineas = e.cambios.flatMap(c => diferencias(c.antes, c.despues).map(d => `${nomTr(c.id)} ${d}`));
+        const lineas = e.cambios.flatMap(c => diferencias(c.antes, c.despues, c.id).map(d => `${nombreId(c.id)} ${d}`));
         return `<div class="hist ${e.deshecho ? "deshecho" : ""}">
           <b>${esc(e.desc)}</b><div class="muted">${esc(e.f)} · ${esc(e.tec)}${e.deshecho ? " · deshecho" : ""}</div>
           <ul>${lineas.slice(0, 8).map(l => `<li>${esc(l)}</li>`).join("")}${lineas.length > 8 ? `<li>… y ${lineas.length - 8} más</li>` : ""}</ul>
@@ -1194,26 +1299,52 @@ function vistaHistorial(filtro) {
 
 // ---------- Exportar / importar ----------
 const COLS = ["Subcampo", "Tracker real", "Nombre completo", "Nº strings", "String", "Marquilla tracker", "Marquilla inversor", "Marquilla string",
-  "Inversor conectado", "PV", "Marquilla = tracker", "Marquilla = inversor", "PV habitual",
-  "Diseño inversor", "Diseño strings", "Marquilla = diseño", "Conectado = diseño", "Estado", "Observaciones", "Técnico", "Fecha"];
-const ANCHOS = [10, 11, 16, 10, 7, 15, 16, 14, 16, 7, 17, 18, 13, 14, 14, 17, 17, 11, 24, 16, 17];
+  "Encontrado en inversor", "PV encontrado", "Marquilla = tracker", "Marquilla = inversor", "PV habitual",
+  "Diseño inversor", "Diseño strings", "Marquilla = diseño", "Encontrado = diseño", "Estado", "Observaciones", "Técnico", "Fecha"];
+const ANCHOS = [10, 11, 16, 10, 7, 15, 16, 14, 18, 12, 17, 18, 13, 14, 14, 17, 17, 11, 24, 16, 17];
+const siNo = (hay, ok) => hay ? (ok ? "Sí" : "No") : "";
 function filasExport() {
   const filas = [];
-  for (const sc of Object.keys(window.TRACKERS)) for (const t of window.TRACKERS[sc]) {
-    const id = sc + "." + t, r = registros[id];
-    if (!tieneDatos(r)) continue;
-    const n = r.n || 4, e = TXT_ESTADO[estado(id)], real = numTr(t), d = diseno(id);
-    for (let i = 0; i < n; i++) {
-      const s = r.s?.[i] || {};
-      filas.push([sc, t, id, n, "S" + (i + 1),
-        s.mTr ? fmtTr(s.mTr, prefTr(t)) : "", s.mInv || "", s.mStr ? "S" + s.mStr : "",
-        s.inv || "", s.ent ? fmtPV(s.ent) : "",
-        s.mTr ? (s.mTr === real ? "Sí" : "No") : "", s.mInv && s.inv ? (s.mInv === s.inv ? "Sí" : "No") : "",
-        s.ent ? (PV_HABITUALES.has(s.ent) ? "Sí" : "No") : "",
-        d ? d.inv : "", d ? (d.n > 1 ? `S${d.desde}-S${d.hasta}` : `S${d.desde}`) : "",
-        levantado(s) && posDiseno(sc)[s.mInv + "|" + s.mStr] ? (marquillaFueraDeDiseno(sc, t, s) ? "No" : "Sí") : "",
-        conectado(s) && d ? (s.inv === d.inv ? "Sí" : "No") : "",
-        e, r.obs || "", r.tec || "", r.fecha || ""]);
+  for (const sc of Object.keys(window.TRACKERS)) {
+    const cx = cruce(sc);
+    for (const t of window.TRACKERS[sc]) {
+      const id = sc + "." + t, r = registros[id];
+      if (!tieneDatos(r)) continue;
+      const n = nStrings(id), e = TXT_ESTADO[estado(id)], real = numTr(t), d = diseno(id);
+      for (let i = 0; i < n; i++) {
+        const s = r.s?.[i] || {}, ub = ubicacion(sc, id, i, cx);
+        filas.push([sc, t, id, n, "S" + (i + 1),
+          s.mTr ? fmtTr(s.mTr, prefTr(t)) : "", s.mInv || "", s.mStr ? "S" + s.mStr : "",
+          ub.length === 1 ? ub[0].inv : ub.map(u => u.inv).join(", "), ub.map(u => fmtPV(u.pv)).join(", "),
+          siNo(s.mTr, s.mTr === real), siNo(ub.length, ub.every(u => u.inv === s.mInv)),
+          siNo(ub.length, ub.every(u => PV_HABITUALES.has(u.pv))),
+          d ? d.inv : "", d ? (d.n > 1 ? `S${d.desde}-S${d.hasta}` : `S${d.desde}`) : "",
+          siNo(levantado(s) && posDiseno(sc)[s.mInv + "|" + s.mStr], !marquillaFueraDeDiseno(sc, t, s)),
+          siNo(ub.length && d, ub.every(u => u.inv === d?.inv)),
+          e, r.obs || "", r.tec || "", r.fecha || ""]);
+      }
+    }
+  }
+  return filas;
+}
+const COLS_INV = ["Subcampo", "Inversor", "PV", "MPPT", "PV habitual", "Estado", "Marquilla tracker", "Marquilla inversor", "Marquilla string",
+  "Tracker real (anotado en el tracker)", "Marquilla = diseño", "Novedades", "Observaciones", "Técnico", "Fecha"];
+function filasInversores() {
+  const filas = [];
+  for (const sc of Object.keys(window.TRACKERS)) {
+    const cx = cruce(sc), pref = prefSC(sc);
+    for (let inv = 1; inv <= INVERSORES; inv++) {
+      const r = registros[idInv(sc, inv)];
+      if (!tieneDatos(r)) continue;
+      for (let pv = 1; pv <= PV_TOTAL; pv++) {
+        const x = r.p?.[pv];
+        if (!pvLeido(x)) continue;
+        const rv = revisarPV(sc, inv, pv, cx), dueno = pvMarquilla(x) && posDiseno(sc)[x.mi + "|" + x.ms];
+        filas.push([sc, inv, fmtPV(pv), MPPT_RANGOS.find(([, a, b]) => pv >= a && pv <= b)[0], PV_HABITUALES.has(pv) ? "Sí" : "No",
+          x.est ? TXT_EST[x.est] : "Con marquilla", x.mt ? fmtTr(x.mt, pref) : "", x.mi || "", x.ms ? "S" + x.ms : "",
+          origen(cx, x).map(o => `${o.t} S${o.i + 1}`).join(", "), siNo(dueno, dueno && numTr(dueno.t) === x.mt),
+          rv.novs.map(n => n.txt).join(" | "), r.obs || "", r.tec || "", r.fecha || ""]);
+      }
     }
   }
   return filas;
@@ -1221,16 +1352,26 @@ function filasExport() {
 function filasNovedades() {
   const f = [];
   for (const sc of Object.keys(window.TRACKERS)) {
-    const ocup = ocupacion(sc), marq = marquillas(sc);
-    for (const t of window.TRACKERS[sc]) for (const nv of novedades(sc + "." + t, ocup, marq)) f.push([sc, t, "S" + (nv.i + 1), nv.txt]);
+    const cx = cruce(sc), marq = marquillas(sc);
+    for (const t of window.TRACKERS[sc]) for (const nv of novedades(sc + "." + t, cx, marq))
+      f.push([sc, "Tracker", `${t} S${nv.i + 1}`, nv.diseno ? "Sí" : "", nv.txt]);
+    for (let inv = 1; inv <= INVERSORES; inv++) for (const nv of novedadesInv(sc, inv, cx))
+      f.push([sc, "Inversor", `${fmtInv(inv)} ${fmtPV(nv.pv)}`, nv.diseno ? "Sí" : "", nv.txt]);
   }
   return f;
 }
 function filasPendientes() {
   const f = [];
-  for (const sc of Object.keys(window.TRACKERS)) for (const t of window.TRACKERS[sc]) {
-    const id = sc + "." + t, e = estado(id), a = avance(id);
-    if (e !== "completo") f.push([sc, t, id, TXT_ESTADO[e], `${a.lev}/${a.n}`, `${a.con}/${a.n}`]);
+  for (const sc of Object.keys(window.TRACKERS)) {
+    const cx = cruce(sc);
+    for (const t of window.TRACKERS[sc]) {
+      const id = sc + "." + t, e = estado(id), a = avance(id);
+      if (e !== "completo") f.push([sc, "Tracker " + t, id, TXT_ESTADO[e], `${a.lev}/${a.n} marquillas`, `${a.con}/${a.n} en inversor`]);
+    }
+    for (let inv = 1; inv <= INVERSORES; inv++) {
+      const l = cx.invLeidos[inv] || 0;
+      if (l < PV_HABITUALES.size) f.push([sc, fmtInv(inv), idInv(sc, inv), l ? "Incompleto" : "Pendiente", `${l}/${PV_HABITUALES.size} PV`, ""]);
+    }
   }
   return f;
 }
@@ -1308,14 +1449,16 @@ function marcarExportado() { escribir(K.exp, ahora()); escribir(K.cambios, []); 
 
 function vistaExportar() {
   cabecera("Exportar datos", "#/");
-  const filas = filasExport(), nt = Object.values(registros).filter(tieneDatos).length;
+  const filas = filasExport(), filasI = filasInversores();
+  const nt = Object.entries(registros).filter(([id, r]) => !esInv(id) && tieneDatos(r)).length;
   const conSync = !!leer(K.syncUrl, "");
   app.innerHTML = `
     <div class="card">
       <div class="stat"><span>Trackers con datos</span><b>${nt}</b></div>
-      <div class="stat"><span>Filas (strings)</span><b>${filas.length}</b></div>
+      <div class="stat"><span>Strings anotados en trackers</span><b>${filas.length}</b></div>
+      <div class="stat"><span>PV anotados en inversores</span><b>${filasI.length}</b></div>
       <div class="stat"><span>Última exportación</span><b>${esc(leer(K.exp, "nunca"))}</b></div>
-      <div class="stat"><span>Trackers modificados sin exportar</span><b>${nCambios()}</b></div>
+      <div class="stat"><span>Registros modificados sin exportar</span><b>${nCambios()}</b></div>
     </div>
     ${conSync ? `<div class="card">
       <h2>Envío automático a la oficina</h2>
@@ -1332,17 +1475,18 @@ function vistaExportar() {
     </div>
     <div class="card">
       <h2>Unir datos de otros técnicos</h2>
-      <p class="muted">Carga archivos .json (copia de seguridad) o .csv exportados por esta app. Con .json gana el dato modificado más reciente; con .csv solo se completan datos vacíos.</p>
+      <p class="muted">Carga archivos .json (copia de seguridad) o .csv exportados por esta app. Con .json gana el dato modificado más reciente y trae trackers e inversores; el .csv solo trae las marquillas de los trackers y completa datos vacíos.</p>
       <input type="file" id="imp" accept=".json,.csv,application/json,text/csv" multiple>
       <div id="impRes" class="muted" style="margin-top:8px"></div>
     </div>`;
   if (conSync) document.getElementById("syncYa").onclick = async () => { await sincronizar(true); vistaExportar(); };
   document.getElementById("exXlsx").onclick = async () => {
-    if (!filas.length) return toast("Aún no hay datos para exportar");
+    if (!filas.length && !filasI.length) return toast("Aún no hay datos para exportar");
     const blob = xlsx([
-      { nombre: "Registro", cab: COLS, filas, anchos: ANCHOS },
-      { nombre: "Novedades", cab: ["Subcampo", "Tracker real", "String", "Novedad"], filas: filasNovedades(), anchos: [10, 11, 7, 70] },
-      { nombre: "Pendientes", cab: ["Subcampo", "Tracker", "Nombre completo", "Estado", "Marquillas", "En inversor"], filas: filasPendientes(), anchos: [10, 9, 16, 12, 11, 12] },
+      { nombre: "Trackers", cab: COLS, filas, anchos: ANCHOS },
+      { nombre: "Inversores", cab: COLS_INV, filas: filasI, anchos: [10, 9, 6, 6, 11, 16, 16, 16, 15, 30, 17, 80, 24, 16, 17] },
+      { nombre: "Novedades", cab: ["Subcampo", "Dónde", "Elemento", "Contra diseño", "Novedad"], filas: filasNovedades(), anchos: [10, 10, 14, 13, 90] },
+      { nombre: "Pendientes", cab: ["Subcampo", "Elemento", "Nombre completo", "Estado", "Avance", "Cruce"], filas: filasPendientes(), anchos: [10, 16, 16, 12, 16, 16] },
     ]);
     if (await compartir(blob, nombreArchivo("xlsx"))) { marcarExportado(); vistaExportar(); }
   };
@@ -1363,16 +1507,17 @@ function vistaExportar() {
         const entrantes = f.name.toLowerCase().endsWith(".json") ? JSON.parse(texto).registros : desdeCsv(texto);
         if (!entrantes || typeof entrantes !== "object") throw new Error("formato no reconocido");
         for (const [id, r] of Object.entries(entrantes)) {
-          if (!existeTracker(id)) { errores.push(`${f.name}: ${id} no existe`); continue; }
+          if (!existeId(id)) { errores.push(`${f.name}: ${id} no existe`); continue; }
           const actual = registros[id];
           if (!actual) { registros[id] = r; nuevos++; tocados.push(id); continue; }
-          const [unido, dif, rec] = fusionar(actual, r);
+          const [unido, dif, rec] = fusionar(actual, r, id);
           if (JSON.stringify(unido) !== JSON.stringify(actual)) { registros[id] = unido; actualizados++; tocados.push(id); }
           if (dif.length) conflictos.push(`${id}: ${dif.join(", ")} (quedó lo más reciente: ${rec.tec} ${rec.fecha})`);
         }
       } catch (e) { errores.push(`${f.name}: ${e.message}`); }
     }
     guardarRegistros(tocados);
+    migrarLegado();
     document.getElementById("impRes").innerHTML =
       `Nuevos: <b>${nuevos}</b> · Actualizados: <b>${actualizados}</b> · Con diferencias: <b>${conflictos.length}</b>` +
       (conflictos.length ? `<br><br>Datos distintos entre técnicos (revisar):<br>${conflictos.map(esc).join("<br>")}` : "") +
@@ -1442,7 +1587,8 @@ function vistaAjustes() {
     <div class="card">
       <div class="stat"><span>Subcampos</span><b>${Object.keys(window.TRACKERS).length}</b></div>
       <div class="stat"><span>Trackers en nomenclatura</span><b>${total}</b></div>
-      <div class="stat"><span>Trackers con datos</span><b>${Object.values(registros).filter(tieneDatos).length}</b></div>
+      <div class="stat"><span>Trackers con datos</span><b>${Object.entries(registros).filter(([id, r]) => !esInv(id) && tieneDatos(r)).length}</b></div>
+      <div class="stat"><span>Inversores con datos</span><b>${Object.entries(registros).filter(([id, r]) => esInv(id) && tieneDatos(r)).length}</b></div>
       <div class="stat"><span>Versión</span><b>${VERSION}</b></div>
     </div>
     <div class="card">
@@ -1485,7 +1631,9 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.ser
 for (const r of Object.values(registros)) {
   r.ts ||= {};
   (r.s || []).forEach((s, i, arr) => { arr[i] = s || {}; CAMPOS.forEach(c => { arr[i][c] = aNum(arr[i][c]); }); });
+  for (const x of Object.values(r.p || {})) ["mt", "mi", "ms"].forEach(c => { x[c] = aNum(x[c]); });
 }
+migrarLegado();
 pintarBadge(); pintarNube();
 enrutar();
 setTimeout(() => sincronizar(false), 2000);
