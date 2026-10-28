@@ -1,5 +1,5 @@
 // Cache para uso sin internet. Cambia VERSION al publicar una actualización.
-const VERSION = "rs-v10";
+const VERSION = "rs-v11";
 const ARCHIVOS = ["./", "index.html", "trackers.js", "diseno.js", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
