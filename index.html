@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
+<script>try { if (localStorage.getItem("rs_sol") === "true") document.documentElement.classList.add("sol"); } catch (e) {}</script>
 <style>
 :root {
   --bg: #f3f5f4;
@@ -29,6 +30,7 @@
   --pend-bg: #e7ecea;
   --err: #b42318;
   --err-bg: #fde4e1;
+  --borde: 1px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -49,6 +51,25 @@
     --err-bg: #3d1a16;
   }
 }
+/* Modo sol: máximo contraste y letra grande, siempre claro */
+html.sol {
+  --bg: #ffffff;
+  --card: #ffffff;
+  --text: #000000;
+  --muted: #1f1f1f;
+  --line: #000000;
+  --accent: #003d1f;
+  --accent-text: #ffffff;
+  --ok: #00561b;
+  --ok-bg: #a9f0bd;
+  --warn: #6b3d00;
+  --warn-bg: #ffd966;
+  --pend: #000000;
+  --pend-bg: #dedede;
+  --err: #a00000;
+  --err-bg: #ffc2ba;
+  --borde: 2px;
+}
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; }
 body {
@@ -59,45 +80,48 @@ body {
 }
 header {
   position: sticky; top: 0; z-index: 5;
-  display: flex; align-items: center; gap: 8px;
-  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+  display: flex; align-items: center; gap: 6px;
+  padding: calc(10px + env(safe-area-inset-top)) 10px 10px;
   background: var(--accent); color: var(--accent-text);
 }
 header h1 { flex: 1; margin: 0; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 header button {
   background: transparent; color: inherit; border: 1px solid currentColor;
-  border-radius: 10px; padding: 8px 12px; font-size: 15px; position: relative;
+  border-radius: 10px; padding: 8px 10px; font-size: 15px; position: relative; white-space: nowrap;
 }
-header button.icono { border: none; font-size: 22px; padding: 4px 10px; }
+header button.icono { border: none; font-size: 22px; padding: 4px 8px; }
+#btnNube { font-size: 14px; padding: 6px 8px; }
+#btnNube.error { background: var(--err); color: #fff; border-color: var(--err); }
 .badge {
   position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px;
   border-radius: 10px; background: var(--err); color: #fff; font-size: 12px; line-height: 20px; text-align: center;
 }
-main { max-width: 720px; margin: 0 auto; padding: 14px 16px 40px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+main { max-width: 720px; margin: 0 auto; padding: 14px 16px 90px; }
+.card { background: var(--card); border: var(--borde) solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
 h2 { font-size: 17px; margin: 4px 0 10px; }
 .muted { color: var(--muted); font-size: 14px; }
 label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 input, select, textarea {
   width: 100%; font-size: 18px; padding: 12px; border-radius: 10px;
-  border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  border: var(--borde) solid var(--line); background: var(--bg); color: var(--text); font-family: inherit;
 }
-#buscar { text-transform: uppercase; }
 input::placeholder { text-transform: none; }
 input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+input[type=checkbox] { width: 22px; height: 22px; padding: 0; vertical-align: middle; margin: 0 8px 0 0; }
+label.check { display: flex; align-items: center; font-size: 15px; color: var(--text); margin: 10px 0; }
 .btn {
   display: block; width: 100%; padding: 14px; font-size: 17px; font-weight: 600;
-  border-radius: 12px; border: none; background: var(--accent); color: var(--accent-text); margin-top: 10px;
+  border-radius: 12px; border: none; background: var(--accent); color: var(--accent-text); margin-top: 10px; font-family: inherit;
 }
 .btn.sec { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
 .btn.peligro { background: transparent; color: var(--err); border: 1.5px solid var(--err); }
-.fila-btn { display: flex; gap: 10px; }
-.fila-btn .btn { flex: 1; }
+.btn:disabled { opacity: .45; }
+a.enlace { text-align: center; text-decoration: none; }
 
 .lista-sc { display: grid; gap: 10px; }
 .sc {
   display: block; text-decoration: none; color: inherit;
-  background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+  background: var(--card); border: var(--borde) solid var(--line); border-radius: 14px; padding: 14px;
 }
 .sc .top { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; font-size: 18px; }
 .barra { height: 8px; border-radius: 4px; background: var(--pend-bg); overflow: hidden; margin-top: 8px; display: flex; }
@@ -108,14 +132,14 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 .filtros { display: flex; gap: 8px; margin-bottom: 12px; }
 .filtros input { flex: 1; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-.chip { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 20px; padding: 6px 12px; font-size: 14px; }
+.chip { border: var(--borde) solid var(--line); background: var(--card); color: var(--text); border-radius: 20px; padding: 6px 12px; font-size: 14px; }
 .chip.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .grid-t { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
 .t {
   display: block; text-align: center; text-decoration: none; padding: 12px 4px; border-radius: 10px;
-  font-weight: 600; font-size: 16px; border: 1px solid transparent;
+  font-weight: 600; font-size: 16px; border: var(--borde) solid transparent;
 }
-.t small { display: block; font-weight: 400; font-size: 11px; opacity: .8; }
+.t small { display: block; font-weight: 400; font-size: 11px; opacity: .85; }
 .st-completo { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
 .st-parcial { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
 .st-pendiente { background: var(--pend-bg); color: var(--pend); }
@@ -123,77 +147,134 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 .ficha-id { font-size: 26px; font-weight: 700; letter-spacing: .5px; margin: 0; word-break: break-all; }
 .estado { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; margin-top: 6px; }
 .segm { display: flex; border: 1.5px solid var(--accent); border-radius: 12px; overflow: hidden; }
-.segm button { flex: 1; padding: 12px; font-size: 17px; font-weight: 600; border: none; background: transparent; color: var(--accent); }
+.segm button { flex: 1; padding: 12px; font-size: 17px; font-weight: 600; border: none; background: transparent; color: var(--accent); font-family: inherit; }
 .segm button.on { background: var(--accent); color: var(--accent-text); }
-.str { display: grid; grid-template-columns: 34px 1fr 1.25fr 1fr; gap: 6px; align-items: end; padding: 10px 0; border-top: 1px solid var(--line); }
-.str input, .str select { font-size: 16px; padding: 12px 8px; }
-.str .info, .pv .info { grid-column: 1 / -1; font-size: 13px; }
-.pv { display: grid; grid-template-columns: 48px 1fr; gap: 8px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line); }
-.pv:first-child { border-top: none; }
-.pv .n { font-weight: 700; font-size: 17px; padding-top: 12px; }
-.pv select { font-size: 15px; padding: 11px 26px 11px 10px; }
-.pv .info { margin-top: 4px; }
-.ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
-a.enlace { text-align: center; text-decoration: none; }
-h2.mppt { font-size: 14px; color: var(--muted); margin: 14px 0 0; }
-h2.mppt:first-child { margin-top: 0; }
-.pv.vacio .n { color: var(--muted); }
-.pv.vacio select { opacity: .6; }
-.pv .n small { display: block; font-size: 11px; font-weight: 400; }
-.panel { display: grid; grid-template-columns: repeat(2, 1fr) 6px repeat(5, 1fr); gap: 4px; margin: 10px 0; }
-.panel a { display: block; text-align: center; font-size: 13px; font-weight: 600; padding: 7px 0; border-radius: 50%; aspect-ratio: 1; text-decoration: none; border: 1.5px solid transparent; line-height: 1.6; }
-.panel .sep { display: block; }
-.c-ok { background: var(--ok-bg); color: var(--ok) !important; border-color: var(--ok) !important; }
-.c-falta { background: var(--pend-bg); color: var(--text) !important; border-color: var(--pend) !important; }
-.c-err { background: var(--err-bg); color: var(--err) !important; border-color: var(--err) !important; }
-.c-vacio { color: var(--muted) !important; border: 1.5px dashed var(--line) !important; }
-.leyenda span { background: none !important; border: none !important; font-size: 16px; }
-.directo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; margin-top: 10px; }
-.directo .btn { margin-top: 0; }
-.info a { color: var(--accent); font-weight: 600; }
+.str { display: grid; grid-template-columns: 34px 1fr 1.25fr 1fr; gap: 6px; align-items: end; padding: 10px 0; border-top: var(--borde) solid var(--line); }
 .str:first-of-type { border-top: none; }
 .str .n { font-weight: 700; font-size: 17px; padding-bottom: 13px; text-align: center; }
+.str input, .str select { font-size: 16px; padding: 12px 8px; }
+.str .info, .pv .info { grid-column: 1 / -1; font-size: 13px; }
+.info a { color: var(--accent); font-weight: 600; }
 .guardado { font-size: 13px; color: var(--muted); text-align: center; margin-top: 8px; min-height: 18px; }
 .nav-t { display: flex; gap: 10px; }
 .nav-t .btn { flex: 1; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
+
+.pv { display: grid; grid-template-columns: 48px 1fr; gap: 8px; align-items: start; padding: 8px 0; border-top: var(--borde) solid var(--line); }
+.pv .n { font-weight: 700; font-size: 17px; padding-top: 12px; }
+.pv .n small { display: block; font-size: 11px; font-weight: 400; }
+.pv.vacio .n { color: var(--muted); }
+.pv .info { margin-top: 4px; }
+.pv-btn {
+  display: block; width: 100%; text-align: left; padding: 12px; border-radius: 10px; font-size: 15px; font-family: inherit;
+  border: var(--borde) solid var(--line); background: var(--bg); color: var(--text);
+}
+.pv-btn.libre { color: var(--muted); border-style: dashed; }
+.pv.vacio .pv-btn.libre { opacity: .6; }
+h2.mppt { font-size: 14px; color: var(--muted); margin: 14px 0 0; }
+h2.mppt:first-child { margin-top: 0; }
+h2.mppt + .pv { border-top: none; }
+.panel { display: grid; grid-template-columns: repeat(2, 1fr) 6px repeat(5, 1fr); gap: 4px; margin: 10px 0; }
+.panel button { display: block; text-align: center; font-size: 13px; font-weight: 600; padding: 0; border-radius: 50%; aspect-ratio: 1; border: 1.5px solid transparent; font-family: inherit; background: none; color: inherit; }
+.panel .sep { display: block; }
+.c-ok { background: var(--ok-bg) !important; color: var(--ok) !important; border-color: var(--ok) !important; }
+.c-falta { background: var(--pend-bg) !important; color: var(--text) !important; border-color: var(--pend) !important; }
+.c-err { background: var(--err-bg) !important; color: var(--err) !important; border-color: var(--err) !important; }
+.c-vacio { color: var(--muted) !important; border: 1.5px dashed var(--line) !important; }
+.leyenda span { font-size: 16px; }
+.directo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; margin-top: 10px; }
+.directo .btn { margin-top: 0; }
+
+/* Buscador de strings (hoja inferior) */
+#hoja { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .45); display: none; }
+#hoja.ver { display: flex; align-items: flex-end; justify-content: center; }
+.hoja-panel {
+  background: var(--card); color: var(--text); width: 100%; max-width: 720px; max-height: 88vh; overflow: auto;
+  border-radius: 18px 18px 0 0; padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+}
+.hoja-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.hoja-top b { flex: 1; font-size: 19px; }
+.hoja-top button { border: none; background: var(--pend-bg); color: var(--text); font-size: 18px; border-radius: 50%; width: 38px; height: 38px; }
+#hQ { font-size: 22px; letter-spacing: 1px; }
+.res {
+  display: block; width: 100%; text-align: left; margin-top: 8px; padding: 12px; border-radius: 12px; font-family: inherit;
+  border: var(--borde) solid var(--line); background: var(--bg); color: var(--text); font-size: 15px;
+}
+.res b { font-size: 17px; }
+.res small { display: block; margin-top: 2px; font-size: 13px; }
+.res.propio { border-color: var(--ok); }
 
 .tip { background: var(--warn-bg); color: var(--text); border: 1px solid var(--warn); border-radius: 12px; padding: 12px; font-size: 14px; margin-bottom: 12px; }
 .tip b { color: var(--warn); }
-.stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.stat { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: var(--borde) solid var(--line); }
 .stat:last-child { border-bottom: none; }
-.toast {
-  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+.stat b { white-space: nowrap; }
+.tabla a { color: var(--accent); font-weight: 600; }
+table.tabla { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tabla th, .tabla td { padding: 6px 4px; border-bottom: var(--borde) solid var(--line); text-align: center; }
+.tabla th:first-child, .tabla td:first-child { text-align: left; }
+.lista-nov { margin: 0; padding-left: 18px; font-size: 14px; }
+.lista-nov li { margin: 4px 0; }
+.lista-nov a, .hist a { color: var(--accent); font-weight: 600; }
+.hist { border-top: var(--borde) solid var(--line); padding: 10px 0; }
+.hist:first-of-type { border-top: none; }
+.hist ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; }
+.hist .btn { width: auto; padding: 8px 14px; font-size: 15px; margin-top: 8px; }
+.hist.deshecho { opacity: .55; }
+
+.toast, #snack {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
   background: var(--text); color: var(--bg); padding: 12px 18px; border-radius: 12px; font-size: 15px;
-  max-width: calc(100% - 32px); z-index: 10; opacity: 0; transition: opacity .2s; pointer-events: none;
+  max-width: calc(100% - 32px);
 }
+.toast { bottom: calc(24px + env(safe-area-inset-bottom)); opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.ver { opacity: 1; }
-.st-dup { background: var(--err-bg); color: var(--err); border-color: var(--err); }
-details.card summary { display: flex; justify-content: space-between; align-items: center; font-size: 17px; cursor: pointer; list-style: none; }
-details.card summary::-webkit-details-marker { display: none; }
-.grid-e { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin-top: 12px; }
-.ent-c { display: block; padding: 8px 6px; border-radius: 8px; border: 1px solid transparent; font-size: 13px; text-decoration: none; text-align: center; }
-.ent-c b { display: block; font-size: 14px; }
-.ent-c span { display: block; word-break: break-word; }
+#snack { top: calc(66px + env(safe-area-inset-top)); display: none; align-items: center; gap: 14px; width: max-content; }
+#snack.ver { display: flex; }
+#snack button { background: none; border: 1.5px solid currentColor; color: inherit; border-radius: 8px; padding: 6px 10px; font-weight: 700; font-size: 15px; }
 select { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: right 14px center, right 9px center; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 24px; }
 .oculto { display: none !important; }
+
+/* Modo sol: letra más grande y bordes más marcados */
+html.sol body { font-size: 18px; font-weight: 500; }
+html.sol .muted, html.sol .str .info, html.sol .pv .info, html.sol .res small { font-size: 16px; }
+html.sol label { font-size: 15px; font-weight: 600; }
+html.sol h2 { font-size: 20px; }
+html.sol .t { font-size: 19px; }
+html.sol .t small { font-size: 13px; }
+html.sol .pv-btn, html.sol .res { font-size: 17px; }
+html.sol .str input, html.sol .str select { font-size: 18px; }
+html.sol .btn { font-size: 19px; border-width: 2.5px; }
+
+@media print {
+  header, .no-imprimir, #snack, .toast, #hoja { display: none !important; }
+  body { background: #fff; color: #000; }
+  main { padding: 0; max-width: none; }
+  .card { border: 1px solid #999; break-inside: avoid; }
+  a { color: #000 !important; text-decoration: none; }
+}
 </style>
 </head>
 <body>
 <header>
   <button id="btnAtras" class="icono oculto" aria-label="Atrás">‹</button>
   <h1 id="titulo">Registro de Strings</h1>
+  <button id="btnSol" class="icono" aria-label="Modo sol (alto contraste)" title="Modo sol">☀</button>
+  <button id="btnNube" class="oculto" aria-label="Envío a la oficina"></button>
   <button id="btnExportar">Exportar<span id="badge" class="badge oculto"></span></button>
   <button id="btnConfig" class="icono" aria-label="Ajustes">⚙</button>
 </header>
 <main id="app"></main>
+<div id="hoja"></div>
+<div id="snack"><span id="snackTxt"></span><button id="snackBtn">Deshacer</button></div>
 <div id="toast" class="toast"></div>
 
 <script src="trackers.js"></script>
 <script>
 "use strict";
-const VERSION = "1.5.0";
-// Configuración de la planta: inversores por subcampo y entradas (strings) por inversor
-const INVERSORES = 22, ENTRADAS = 20;  // ENTRADAS = strings por inversor
+const VERSION = "2.0.0";
+// Configuración de la planta: inversores por subcampo y strings por inversor
+const INVERSORES = 22, ENTRADAS = 20;
 // Conectores del inversor: 28 PV en 6 MPPT. Los 20 "habituales" son los que normalmente van conectados
 const PV_TOTAL = 28;
 const PV_HABITUALES = new Set([2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 16, 17, 18, 21, 22, 23, 25, 26, 27, 28]);
@@ -203,7 +284,12 @@ const PANEL = [
   { arriba: [2, 4, null, 10, 11, 12, 13, 14], abajo: [1, 3, null, 5, 6, 7, 8, 9] },
   { arriba: [16, 18, null, 24, 25, 26, 27, 28], abajo: [15, 17, null, 19, 20, 21, 22, 23] },
 ];
-const K = { reg: "rs_registros", tec: "rs_tecnico", exp: "rs_ultima_exportacion", cambios: "rs_cambios", ultSc: "rs_ultimo_subcampo", ultInv: "rs_ultimo_inversor" };
+const K = {
+  reg: "rs_registros", tec: "rs_tecnico", exp: "rs_ultima_exportacion", cambios: "rs_cambios",
+  ultSc: "rs_ultimo_subcampo", ultInv: "rs_ultimo_inversor", hist: "rs_historial", sol: "rs_sol", auto: "rs_avance_auto",
+  sync: "rs_sync_pendientes", syncUrl: "rs_sync_url", syncClave: "rs_sync_clave", syncDesde: "rs_sync_desde",
+  syncUlt: "rs_sync_ultima", syncErr: "rs_sync_error",
+};
 const app = document.getElementById("app");
 
 // ---------- Almacenamiento ----------
@@ -218,13 +304,14 @@ function escribir(clave, valor) {
 let registros = leer(K.reg, {});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
 
-// K.cambios guarda los trackers modificados desde la última exportación
+const agregarA = (clave, ids) => { const s = new Set(leer(clave, [])); ids.forEach(i => s.add(i)); escribir(clave, [...s]); };
+// Guarda y marca los trackers como pendientes de exportar y de enviar a la oficina
 function guardarRegistros(ids = []) {
   escribir(K.reg, registros);
-  const cambios = new Set(leer(K.cambios, []));
-  ids.forEach(i => cambios.add(i));
-  escribir(K.cambios, [...cambios]);
-  pintarBadge();
+  agregarA(K.cambios, ids);
+  agregarA(K.sync, ids);
+  pintarBadge(); pintarNube();
+  if (ids.length) programarSync();
 }
 function nCambios() { const c = leer(K.cambios, []); return Array.isArray(c) ? c.length : 0; }
 
@@ -232,6 +319,7 @@ function nCambios() { const c = leer(K.cambios, []); return Array.isArray(c) ? c
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const limpio = s => String(s ?? "").trim().toUpperCase();
 const ahora = () => new Date().toLocaleString("sv-SE").slice(0, 16);
+const clonar = o => o == null ? null : JSON.parse(JSON.stringify(o));
 let toastTimer;
 function toast(msg) {
   const t = document.getElementById("toast");
@@ -240,6 +328,7 @@ function toast(msg) {
 }
 function tecnico() { return leer(K.tec, ""); }
 function nStrings(id) { return registros[id]?.n || window.STRINGS_DEFECTO[id] || 4; }
+const existeTracker = id => { const [sc, t] = String(id).split("."); return !!window.TRACKERS[sc]?.includes(t); };
 
 const pad = n => String(n).padStart(2, "0");
 const fmtInv = n => "INV " + pad(n);
@@ -248,9 +337,77 @@ const aNum = v => { const n = parseInt(String(v ?? "").replace(/\D/g, ""), 10); 
 const numTr = t => parseInt(String(t).replace(/\D/g, ""), 10);
 const prefTr = t => String(t).replace(/\d+$/, "");
 const fmtTr = (n, pref = "MQR") => pref + String(n).padStart(3, "0");
-// Por string: mTr/mInv/mStr = lo que dice la marquilla del cable; inv/ent = inversor y PV donde está conectado
+const nomTr = id => id.split(".")[1];
+
+// ---------- Modelo de datos ----------
+// Por string: mTr/mInv/mStr = lo que dice la marquilla del cable; inv/ent = inversor y PV donde está conectado.
+// Cada campo guarda en r.ts la hora (ISO) de su último cambio, para unir datos de varios técnicos campo por campo.
 const CAMPOS = ["mTr", "mInv", "mStr", "inv", "ent"];
 const TXT_CAMPO = { mTr: "marquilla tracker", mInv: "marquilla inversor", mStr: "marquilla string", inv: "inversor", ent: "PV" };
+const CLAVES = ["n", "obs"];
+for (let i = 0; i < 4; i++) for (const c of CAMPOS) CLAVES.push(i + "." + c);
+
+function leerCampo(r, k) {
+  if (!r) return "";
+  if (k === "n") return r.n || "";
+  if (k === "obs") return r.obs || "";
+  const [i, c] = k.split(".");
+  return r.s?.[+i]?.[c] ?? "";
+}
+function escribirCampo(r, k, v) {
+  if (k === "n") r.n = v;
+  else if (k === "obs") r.obs = v;
+  else {
+    const [i, c] = k.split(".");
+    r.s ||= [];
+    for (let j = 0; j <= +i; j++) r.s[j] ||= {};
+    r.s[+i][c] = v;
+  }
+}
+const valoresDe = r => Object.fromEntries(CLAVES.map(k => [k, leerCampo(r, k)]));
+function txtValor(k, v) {
+  if (v === "" || v == null) return "—";
+  const c = k.split(".")[1];
+  if (c === "mTr") return fmtTr(v);
+  if (c === "mInv" || c === "inv") return fmtInv(v);
+  if (c === "mStr") return "S" + v;
+  if (c === "ent") return fmtPV(v);
+  return String(v);
+}
+const txtClave = k => k === "n" ? "Nº strings" : k === "obs" ? "Observaciones" : `S${+k.split(".")[0] + 1} ${TXT_CAMPO[k.split(".")[1]]}`;
+
+// Cambia campos de un tracker ({"n": 2, "0.mInv": 3, ...}); solo marca hora en los que cambian.
+// Devuelve {id, antes} si hubo cambios. Usar siempre dentro de transaccion().
+function aplicar(id, cambios) {
+  const antes = clonar(registros[id] || null);
+  const r = registros[id] ||= { n: nStrings(id), s: [], obs: "", ts: {} };
+  r.ts ||= {};
+  const t = new Date().toISOString();
+  let hubo = false;
+  for (const [k, v] of Object.entries(cambios)) {
+    if (leerCampo(r, k) === v) continue;
+    escribirCampo(r, k, v); r.ts[k] = t; hubo = true;
+  }
+  if (!hubo) { if (!antes) delete registros[id]; return null; }
+  r.tec = tecnico(); r.fecha = ahora();
+  return { id, antes };
+}
+
+// Agrupa cambios en una entrada del historial, guarda y programa el envío
+function transaccion(meta, fn) {
+  const res = fn().filter(Boolean);
+  if (!res.length) return null;
+  const porId = new Map();
+  for (const c of res) if (!porId.has(c.id)) porId.set(c.id, c.antes);
+  const ids = [...porId.keys()];
+  guardarRegistros(ids);
+  const entrada = registrarHistorial(meta, porId);
+  if (meta.snack) mostrarDeshacer(entrada);
+  return entrada;
+}
+
+// Un tracker sin ningún dato cuenta como pendiente (ej. después de borrar o deshacer)
+const tieneDatos = r => !!r && (!!r.obs || (r.s || []).some(s => s && CAMPOS.some(c => s[c])));
 const levantado = s => !!(s && s.mTr && s.mInv && s.mStr);
 const conectado = s => !!(s && s.inv && s.ent);
 
@@ -260,7 +417,7 @@ function avance(id) {
   return { n, lev, con };
 }
 function estado(id) {
-  if (!registros[id]) return "pendiente";
+  if (!tieneDatos(registros[id])) return "pendiente";
   const a = avance(id);
   return a.lev === a.n && a.con === a.n ? "completo" : "parcial";
 }
@@ -277,8 +434,7 @@ function ocupacion(sc) {
   const m = {};
   for (const [id, r] of Object.entries(registros)) {
     if (!id.startsWith(sc + ".")) continue;
-    const n = r.n || 4;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < (r.n || 4); i++) {
       const s = r.s?.[i];
       if (conectado(s)) (m[s.inv + "|" + s.ent] ||= []).push({ id, i });
     }
@@ -299,9 +455,9 @@ function marquillas(sc) {
   return m;
 }
 
-// Diferencias encontradas en un tracker: marquilla de otro tracker, otro inversor, o PV con dos strings
+// Diferencias encontradas en un tracker
 function novedades(id, ocup, marq) {
-  const r = registros[id]; if (!r) return [];
+  const r = registros[id]; if (!tieneDatos(r)) return [];
   const [sc, t] = id.split("."), real = numTr(t), out = [];
   ocup ||= ocupacion(sc); marq ||= marquillas(sc);
   for (let i = 0; i < (r.n || 4); i++) {
@@ -320,9 +476,127 @@ function novedadesSC(sc) {
   return window.TRACKERS[sc].reduce((a, t) => a + novedades(sc + "." + t, ocup, marq).length, 0);
 }
 
-function sellar(ids) {
-  for (const id of new Set(ids)) if (registros[id]) { registros[id].tec = tecnico(); registros[id].fecha = ahora(); }
+// Une dos versiones del mismo tracker: por cada campo gana el cambio más reciente (incluye datos borrados)
+function fusionar(a, b) {
+  const out = { n: a.n || b.n || 4, s: [], obs: "", ts: {} }, dif = [];
+  let maxA = "", maxB = "";
+  for (const k of CLAVES) {
+    const ta = a.ts?.[k] || "", tb = b.ts?.[k] || "", va = leerCampo(a, k), vb = leerCampo(b, k);
+    // Sin horas (datos antiguos o CSV) solo se rellenan campos vacíos
+    const usarB = tb > ta || (!ta && !tb && va === "" && vb !== "");
+    escribirCampo(out, k, usarB ? vb : va);
+    const t = usarB ? tb : ta;
+    if (t) out.ts[k] = t;
+    if (ta > maxA) maxA = ta;
+    if (tb > maxB) maxB = tb;
+    if (va !== "" && vb !== "" && va !== vb) dif.push(txtClave(k));
+  }
+  const rec = maxB > maxA || (!maxA && !maxB && (b.fecha || "") > (a.fecha || "")) ? b : a;
+  out.tec = rec.tec || a.tec || b.tec || ""; out.fecha = rec.fecha || a.fecha || b.fecha || "";
+  return [out, dif, rec];
 }
+
+// ---------- Historial y deshacer ----------
+const MAX_HIST = 300;
+function registrarHistorial(meta, porId) {
+  const hist = leer(K.hist, []);
+  const cambios = [...porId].map(([id, antes]) => ({ id, antes, despues: clonar(registros[id] || null) }));
+  const ultimo = hist[hist.length - 1];
+  // Las ediciones seguidas de la misma ficha se agrupan en una sola entrada
+  if (ultimo && meta.tipo.startsWith("ficha:") && ultimo.tipo === meta.tipo && ultimo.tec === tecnico() &&
+      !ultimo.deshecho && Date.now() - Date.parse(ultimo.t) < 120000) {
+    ultimo.cambios[0].despues = cambios[0].despues;
+    ultimo.t = new Date().toISOString(); ultimo.f = ahora();
+    escribir(K.hist, hist);
+    return ultimo;
+  }
+  const entrada = { id: Date.now() + "-" + Math.random().toString(36).slice(2, 6), t: new Date().toISOString(), f: ahora(), tec: tecnico(), tipo: meta.tipo, desc: meta.desc, cambios };
+  hist.push(entrada);
+  escribir(K.hist, hist.slice(-MAX_HIST));
+  return entrada;
+}
+function diferencias(antes, despues) {
+  const a = valoresDe(antes), d = valoresDe(despues);
+  return CLAVES.filter(k => a[k] !== d[k] && !(k === "n" && (!a[k] || !d[k])))
+    .map(k => `${txtClave(k)}: ${txtValor(k, a[k])} → ${txtValor(k, d[k])}`);
+}
+function deshacer(entradaId) {
+  const hist = leer(K.hist, []), e = hist.find(x => x.id === entradaId);
+  if (!e || e.deshecho) return toast("Ese cambio ya se deshizo");
+  const posteriores = e.cambios.some(c => JSON.stringify(valoresDe(registros[c.id])) !== JSON.stringify(valoresDe(c.despues)));
+  if (posteriores && !confirm("Hubo cambios después de este en los mismos trackers. ¿Deshacer igual?")) return;
+  e.deshecho = true;
+  escribir(K.hist, hist);
+  transaccion({ tipo: "deshacer", desc: "Deshacer: " + e.desc }, () => e.cambios.map(c => aplicar(c.id, valoresDe(c.antes))));
+  toast("Cambio deshecho");
+  refrescar();
+}
+let snackTimer;
+function mostrarDeshacer(entrada) {
+  const sn = document.getElementById("snack");
+  document.getElementById("snackTxt").textContent = entrada.desc;
+  document.getElementById("snackBtn").onclick = () => { sn.classList.remove("ver"); deshacer(entrada.id); };
+  sn.classList.add("ver");
+  clearTimeout(snackTimer); snackTimer = setTimeout(() => sn.classList.remove("ver"), 7000);
+}
+
+// ---------- Envío a la oficina (Google Sheets) ----------
+let sincronizando = false, syncTimer = null;
+function programarSync() {
+  if (!leer(K.syncUrl, "")) return;
+  clearTimeout(syncTimer); syncTimer = setTimeout(() => sincronizar(false), 4000);
+}
+async function sincronizar(manual) {
+  const url = leer(K.syncUrl, "");
+  if (!url || sincronizando) return false;
+  if (!navigator.onLine) { if (manual) toast("Sin señal: se enviará cuando haya internet"); return false; }
+  sincronizando = true; pintarNube();
+  try {
+    const pend = leer(K.sync, []), lote = {};
+    for (const id of pend) if (registros[id]) lote[id] = clonar(registros[id]);
+    const resp = await fetch(url, {
+      method: "POST",
+      body: JSON.stringify({ accion: "sync", clave: leer(K.syncClave, ""), tecnico: tecnico(), version: VERSION, desde: leer(K.syncDesde, 0), registros: lote }),
+    });
+    const j = await resp.json();
+    if (!j.ok) throw new Error(j.error || "respuesta inválida");
+    // Quita de pendientes lo enviado que no cambió mientras se enviaba
+    const quedan = new Set(leer(K.sync, []));
+    for (const id of pend) if (JSON.stringify(registros[id] || null) === JSON.stringify(lote[id] || null)) quedan.delete(id);
+    // Une lo que registraron los otros técnicos
+    let recibidos = 0;
+    for (const [id, rec] of Object.entries(j.registros || {})) {
+      if (!existeTracker(id) || !rec) continue;
+      const local = registros[id], unido = local ? fusionar(local, rec)[0] : rec;
+      if (JSON.stringify(unido) !== JSON.stringify(local)) { registros[id] = unido; recibidos++; }
+    }
+    escribir(K.reg, registros);
+    escribir(K.sync, [...quedan]);
+    escribir(K.syncDesde, j.ahora || 0);
+    escribir(K.syncUlt, ahora());
+    escribir(K.syncErr, "");
+    if (manual) toast(`Enviado a la oficina${recibidos ? ` · ${recibidos} tracker(s) actualizados de otros técnicos` : ""}`);
+    if (recibidos) refrescarSiQuieto();
+    return true;
+  } catch (e) {
+    escribir(K.syncErr, `${ahora()}: ${e.message}`);
+    if (manual) toast("No se pudo enviar: " + e.message);
+    return false;
+  } finally {
+    sincronizando = false; pintarNube();
+  }
+}
+function pintarNube() {
+  const b = document.getElementById("btnNube");
+  if (!leer(K.syncUrl, "")) return b.classList.add("oculto");
+  const n = leer(K.sync, []).length, err = leer(K.syncErr, "");
+  b.classList.remove("oculto");
+  b.classList.toggle("error", !!err && n > 0);
+  b.textContent = sincronizando ? "☁ …" : n ? `☁ ${n}` : "☁ ✓";
+  b.title = n ? `${n} tracker(s) por enviar a la oficina` : "Todo enviado a la oficina";
+}
+window.addEventListener("online", () => sincronizar(false));
+setInterval(() => sincronizar(false), 60000);
 
 // ---------- Navegación ----------
 const btnAtras = document.getElementById("btnAtras");
@@ -331,16 +605,30 @@ let destinoAtras = "#/";
 btnAtras.onclick = () => { history.length > 1 ? history.back() : (location.hash = destinoAtras); };
 document.getElementById("btnExportar").onclick = () => { location.hash = "#/exportar"; };
 document.getElementById("btnConfig").onclick = () => { location.hash = "#/ajustes"; };
-window.addEventListener("hashchange", enrutar);
+document.getElementById("btnNube").onclick = () => { location.hash = "#/ajustes"; sincronizar(true); };
+document.getElementById("btnSol").onclick = () => {
+  const on = !document.documentElement.classList.contains("sol");
+  document.documentElement.classList.toggle("sol", on);
+  escribir(K.sol, on);
+  toast(on ? "Modo sol activado" : "Modo sol desactivado");
+};
+window.addEventListener("hashchange", () => { cerrarBuscador(); enrutar(); });
 
 function cabecera(txt, atras) {
   titulo.textContent = txt;
   btnAtras.classList.toggle("oculto", !atras);
   destinoAtras = atras || "#/";
 }
+// Vuelve a dibujar la pantalla actual sin perder la posición
+function refrescar() { const y = window.scrollY; enrutar(true); window.scrollTo(0, y); }
+function refrescarSiQuieto() {
+  const a = document.activeElement;
+  if (document.getElementById("hoja").classList.contains("ver") || (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) return;
+  refrescar();
+}
 
-function enrutar() {
-  window.scrollTo(0, 0);
+function enrutar(mantenerScroll) {
+  if (!mantenerScroll) window.scrollTo(0, 0);
   if (!tecnico()) return vistaTecnico();
   const h = decodeURIComponent(location.hash.slice(1) || "/");
   let m;
@@ -348,6 +636,8 @@ function enrutar() {
   if ((m = h.match(/^\/t\/([^.]+)\.(.+)$/)) && window.TRACKERS[m[1]]?.includes(m[2])) return vistaFicha(m[1], m[2]);
   if ((m = h.match(/^\/inv\/([^/]+)\/(\d+)$/)) && window.TRACKERS[m[1]] && +m[2] >= 1 && +m[2] <= INVERSORES) return vistaInversor(m[1], +m[2]);
   if ((m = h.match(/^\/inv\/([^/]+)$/)) && window.TRACKERS[m[1]]) return vistaInversores(m[1]);
+  if ((m = h.match(/^\/resumen\/(.+)$/)) && window.TRACKERS[m[1]]) return vistaResumen(m[1]);
+  if ((m = h.match(/^\/historial(?:\/(.+))?$/))) return vistaHistorial(m[1] && existeTracker(m[1]) ? m[1] : null);
   if (h === "/exportar") return vistaExportar();
   if (h === "/ajustes") return vistaAjustes();
   return vistaInicio();
@@ -437,7 +727,8 @@ function vistaSubcampo(sc) {
     <div class="card"><div class="stat"><span>Trackers completos</span><b>${r.c} / ${r.total}</b></div>
       <div class="stat"><span>Novedades (marquillas que no coinciden)</span><b class="${nov ? "err" : ""}">${nov}</b></div>
       <div class="barra"><i class="c" style="width:${r.c / r.total * 100}%"></i><i class="p" style="width:${r.p / r.total * 100}%"></i></div>
-      <a class="btn sec enlace" href="#/inv/${esc(sc)}">Paso 2: en los ${INVERSORES} inversores</a></div>
+      <a class="btn enlace" href="#/inv/${esc(sc)}">Paso 2: en los ${INVERSORES} inversores</a>
+      <a class="btn sec enlace" href="#/resumen/${esc(sc)}">Resumen del subcampo</a></div>
     <h2>Paso 1: en los trackers</h2>
     <p class="muted" style="margin-top:-6px">M = marquillas anotadas · I = asociados en inversor</p>
     <div class="filtros"><input id="buscar" inputmode="numeric" placeholder="Número de tracker (ej. 85)"></div>
@@ -452,7 +743,7 @@ function vistaSubcampo(sc) {
     const html = window.TRACKERS[sc].filter(t => {
       const e = estado(sc + "." + t);
       if (filtroSC !== "todos" && e !== filtroSC) return false;
-      return !q || String(parseInt(t.replace(/\D/g, ""), 10)).includes(String(parseInt(q, 10)));
+      return !q || String(numTr(t)).includes(String(parseInt(q, 10)));
     }).map(t => {
       const id = sc + "." + t, e = estado(id), a = avance(id);
       return `<a class="t st-${e}" href="#/t/${esc(id)}">${esc(t.replace(/^\D+/, ""))}<small>M${a.lev}/${a.n} · I${a.con}/${a.n}</small></a>`;
@@ -502,7 +793,8 @@ function vistaFicha(sc, t) {
       <button class="btn" id="sig" ${idx === lista.length - 1 ? "disabled" : ""}>Siguiente ›</button>
     </div>
     <a class="btn sec enlace" id="irInv" href="#/inv/${esc(sc)}">Ir a los inversores</a>
-    <button class="btn peligro" id="borrar" ${registros[id] ? "" : "style='display:none'"}>Borrar datos de este tracker</button>`;
+    <a class="btn sec enlace" href="#/historial/${esc(id)}">Historial de este tracker</a>
+    <button class="btn peligro" id="borrar">Borrar datos de este tracker</button>`;
 
   const strs = document.getElementById("strs");
   const opts = (max, sel, fmt) => `<option value="">—</option>` +
@@ -541,7 +833,7 @@ function vistaFicha(sc, t) {
       const mTr = aNum(div.querySelector(".mTr").value), mInv = aNum(div.querySelector(".mInv").value), mStr = aNum(div.querySelector(".mStr").value);
       if (mTr && mTr !== real) msgs.push(`<span class="warn">⚠ La marquilla es de otro tracker: ${fmtTr(mTr, pref)}</span>`);
       const rep = (marq[mInv + "|" + mStr] || []).filter(u => !(u.id === id && u.i === i));
-      if (mInv && mStr && rep.length) msgs.push(`<span class="warn">⚠ ${fmtInv(mInv)} S${mStr} ya está anotada en ${rep.map(u => `${u.id.split(".")[1]} S${u.i + 1}`).join(", ")}</span>`);
+      if (mInv && mStr && rep.length) msgs.push(`<span class="warn">⚠ ${fmtInv(mInv)} S${mStr} ya está anotada en ${rep.map(u => `${nomTr(u.id)} S${u.i + 1}`).join(", ")}</span>`);
       if (conectado(s)) {
         msgs.push(`<span class="ok">Conectado en ${fmtInv(s.inv)} · ${fmtPV(s.ent)}</span>`);
         if (mInv && mInv !== s.inv) msgs.push(`<span class="err">⚠ La marquilla dice ${fmtInv(mInv)}</span>`);
@@ -556,17 +848,14 @@ function vistaFicha(sc, t) {
     const ir = document.getElementById("irInv");
     ir.href = inv1 ? `#/inv/${sc}/${inv1}` : `#/inv/${sc}`;
     ir.textContent = inv1 ? `Ir al ${fmtInv(inv1)} (asociar PV)` : "Ir a los inversores";
+    document.getElementById("borrar").style.display = tieneDatos(registros[id]) ? "" : "none";
   }
 
   function guardar() {
-    const prev = registros[id]?.s || [];
-    // Mezcla con lo existente para no perder la conexión al inversor ni los strings 3-4 ocultos
-    const s = leerForm().map((f, i) => ({ ...(prev[i] || {}), ...f }));
-    for (let i = s.length; i < prev.length; i++) s[i] = prev[i];
-    registros[id] = { n, s, obs: document.getElementById("obs").value.trim(), tec: tecnico(), fecha: ahora() };
-    guardarRegistros([id]);
-    document.getElementById("guardado").textContent = `Guardado ${registros[id].fecha} · ${tecnico()}`;
-    document.getElementById("borrar").style.display = "";
+    const c = { n, obs: document.getElementById("obs").value.trim() };
+    leerForm().forEach((f, i) => { c[i + ".mTr"] = f.mTr; c[i + ".mInv"] = f.mInv; c[i + ".mStr"] = f.mStr; });
+    transaccion({ tipo: "ficha:" + id, desc: `Marquillas ${t}` }, () => [aplicar(id, c)]);
+    if (registros[id]?.fecha) document.getElementById("guardado").textContent = `Guardado ${registros[id].fecha} · ${registros[id].tec}`;
     validar();
   }
 
@@ -581,8 +870,10 @@ function vistaFicha(sc, t) {
     location.replace(`#/t/${sc}.${lista[idx + 1]}`);
   };
   document.getElementById("borrar").onclick = () => {
-    if (!confirm(`¿Borrar los datos registrados de ${id}?`)) return;
-    delete registros[id]; guardarRegistros([id]); toast("Datos borrados"); vistaFicha(sc, t);
+    if (!confirm(`¿Borrar los datos registrados de ${id}? (se puede deshacer)`)) return;
+    const vacio = Object.fromEntries(CLAVES.filter(k => k !== "n").map(k => [k, ""]));
+    transaccion({ tipo: "borrar", desc: `Borrado ${t}`, snack: true }, () => [aplicar(id, vacio)]);
+    vistaFicha(sc, t);
   };
   pintarStrings();
 }
@@ -597,17 +888,12 @@ function vistaInversores(sc) {
   }
   let total = 0;
   const filas = Array.from({ length: INVERSORES }, (_, k) => k + 1).map(inv => {
-    let usadas = 0, dup = 0, fuera = 0;
-    for (let e = 1; e <= PV_TOTAL; e++) {
-      const u = ocup[inv + "|" + e] || [];
-      if (u.length) PV_HABITUALES.has(e) ? usadas++ : fuera++;
-      if (u.length > 1) dup++;
-    }
-    total += usadas;
-    const alertas = [dup && `${dup} PV con dos strings`, fuera && `${fuera} en PV que normalmente va vacío`].filter(Boolean);
+    const e = estadoInversor(ocup, inv);
+    total += e.usadas;
+    const alertas = [e.dup && `${e.dup} PV con dos strings`, e.fuera && `${e.fuera} en PV que normalmente va vacío`].filter(Boolean);
     return `<a class="sc" href="#/inv/${esc(sc)}/${inv}">
-      <div class="top"><span>${fmtInv(inv)}</span><span class="muted">${usadas}/${PV_HABITUALES.size} PV</span></div>
-      <div class="barra"><i class="c" style="width:${usadas / PV_HABITUALES.size * 100}%"></i></div>
+      <div class="top"><span>${fmtInv(inv)}</span><span class="muted">${e.usadas}/${PV_HABITUALES.size} PV</span></div>
+      <div class="barra"><i class="c" style="width:${e.usadas / PV_HABITUALES.size * 100}%"></i></div>
       <div class="muted" style="margin-top:6px">${esperados[inv] || 0} strings con marquilla de este inversor${alertas.length ? ` · <span class="err">${alertas.join(" · ")}</span>` : ""}</div>
     </a>`;
   }).join("");
@@ -615,120 +901,241 @@ function vistaInversores(sc) {
     <div class="card"><div class="stat"><span>PV asociados en el subcampo</span><b>${total} / ${INVERSORES * PV_HABITUALES.size}</b></div></div>
     <div class="lista-sc">${filas}</div>`;
 }
+function estadoInversor(ocup, inv) {
+  let usadas = 0, dup = 0, fuera = 0;
+  for (let e = 1; e <= PV_TOTAL; e++) {
+    const u = ocup[inv + "|" + e] || [];
+    if (u.length) PV_HABITUALES.has(e) ? usadas++ : fuera++;
+    if (u.length > 1) dup++;
+  }
+  return { usadas, dup, fuera };
+}
+
+// Cómo se lee un string en las listas: como su marquilla; si es de otro tracker se indica el real
+function etiquetaString({ s, t, i }) {
+  return levantado(s) ? `${fmtTr(s.mTr, prefTr(t))} · S${s.mStr} · ${fmtInv(s.mInv)}` : `${t} S${i + 1} (sin marquilla anotada)`;
+}
+
+// Conecta un string a un PV (o lo deja libre). Devuelve false si el técnico cancela.
+function asignarPV(sc, inv, pv, destino) {
+  if (destino) {
+    const s = registros[destino.id]?.s?.[destino.i];
+    if (conectado(s) && !(s.inv === inv && s.ent === pv) &&
+        !confirm(`Ese string ya está en ${fmtInv(s.inv)} ${fmtPV(s.ent)}. ¿Moverlo a ${fmtInv(inv)} ${fmtPV(pv)}?`)) return false;
+  }
+  const desc = destino ? `${fmtInv(inv)} ${fmtPV(pv)} ← ${nomTr(destino.id)} S${destino.i + 1}` : `${fmtInv(inv)} ${fmtPV(pv)} liberado`;
+  transaccion({ tipo: "pv", desc, snack: true }, () => {
+    const res = [];
+    for (const u of ocupacion(sc)[inv + "|" + pv] || [])
+      if (!destino || u.id !== destino.id || u.i !== destino.i) res.push(aplicar(u.id, { [u.i + ".inv"]: "", [u.i + ".ent"]: "" }));
+    if (destino) res.push(aplicar(destino.id, { [destino.i + ".inv"]: inv, [destino.i + ".ent"]: pv }));
+    return res;
+  });
+  return true;
+}
 
 // Paso 2, en el inversor: a cada PV se le asigna el string cuyo cable llega ahí
 function vistaInversor(sc, inv) {
   escribir(K.ultSc, sc); escribir(K.ultInv, inv);
   cabecera(`${fmtInv(inv)} · ${sc}`, "#/inv/" + sc);
-  const grupos = { propio: [], otros: [], sin: [] };
-  for (const t of window.TRACKERS[sc]) {
-    const id = sc + "." + t, n = nStrings(id);
-    for (let i = 0; i < n; i++) {
-      const s = registros[id]?.s?.[i] || {}, it = { v: id + "|" + i, s, t, i };
-      if (!levantado(s)) grupos.sin.push(it);
-      else (s.mInv === inv ? grupos.propio : grupos.otros).push(it);
-    }
-  }
-  const orden = (a, b) => (a.s.mInv - b.s.mInv) || (a.s.mStr - b.s.mStr) || (a.s.mTr - b.s.mTr);
-  grupos.propio.sort(orden); grupos.otros.sort(orden);
-  // La opción se lee como la marquilla del cable; si la marquilla es de otro tracker se indica el real
-  const etiqueta = ({ s, t, i }) => {
-    let txt = levantado(s) ? `S${s.mStr} · ${fmtTr(s.mTr, prefTr(t))} · ${fmtInv(s.mInv)}` : `${t} S${i + 1} (sin marquilla anotada)`;
-    if (levantado(s) && s.mTr !== numTr(t)) txt += ` → real ${t} S${i + 1}`;
-    // ✓ = ese string ya está asociado a algún PV
-    return (conectado(s) ? "✓ " : "") + txt;
-  };
-  const optsHtml = `<option value="">— libre —</option>` +
-    [[`Marquilla dice ${fmtInv(inv)}`, grupos.propio], ["Marquilla de otro inversor", grupos.otros], ["Sin marquilla anotada", grupos.sin]]
-      .filter(g => g[1].length)
-      .map(([lbl, arr]) => `<optgroup label="${esc(lbl)}">${arr.map(it => `<option value="${esc(it.v)}">${esc(etiqueta(it))}</option>`).join("")}</optgroup>`).join("");
-
   const ocup = ocupacion(sc);
   let filas = "";
   for (const [m, desde, hasta] of MPPT_RANGOS) {
     filas += `<h2 class="mppt">MPPT${m}</h2>`;
     for (let pv = desde; pv <= hasta; pv++) {
-      const hab = PV_HABITUALES.has(pv);
-      filas += `<div class="pv ${hab ? "" : "vacio"}" data-pv="${pv}" id="pv${pv}"><div class="n">${fmtPV(pv)}${hab ? "" : "<small>vacío</small>"}</div>
-        <div><select class="sel">${optsHtml}</select><div class="info"></div></div></div>`;
+      const hab = PV_HABITUALES.has(pv), u = ocup[inv + "|" + pv] || [], msgs = [];
+      let txt = "— libre · toca para asignar —";
+      if (u[0]) {
+        const s = registros[u[0].id].s[u[0].i], t = nomTr(u[0].id);
+        txt = etiquetaString({ s, t, i: u[0].i });
+        if (!hab) msgs.push(`<span class="err">⚠ Novedad: este PV normalmente va vacío</span>`);
+        if (u.length > 1) msgs.push(`<span class="err">⚠ Hay ${u.length} strings en este PV: ${u.map(x => `${esc(nomTr(x.id))} S${x.i + 1}`).join(", ")}</span>`);
+        msgs.push(`Tracker real: <a href="#/t/${esc(u[0].id)}">${esc(t)} S${u[0].i + 1}</a>`);
+        if (s.mInv && s.mInv !== inv) msgs.push(`<span class="err">⚠ La marquilla dice ${fmtInv(s.mInv)}</span>`);
+        if (s.mTr && s.mTr !== numTr(t)) msgs.push(`<span class="warn">⚠ Marquilla de ${fmtTr(s.mTr, prefTr(t))}</span>`);
+      }
+      filas += `<div class="pv ${hab ? "" : "vacio"}" id="pv${pv}"><div class="n">${fmtPV(pv)}${hab ? "" : "<small>vacío</small>"}</div>
+        <div><button class="pv-btn ${u[0] ? "" : "libre"}" data-pv="${pv}">${esc(txt)}</button><div class="info">${msgs.join(" · ")}</div></div></div>`;
     }
   }
   const celda = pv => {
     if (pv === null) return `<i class="sep"></i>`;
     const u = ocup[inv + "|" + pv] || [], hab = PV_HABITUALES.has(pv);
     const cls = u.length > 1 || (u.length && !hab) ? "c-err" : u.length ? "c-ok" : hab ? "c-falta" : "c-vacio";
-    return `<a class="${cls}" href="#pv${pv}" data-ir="${pv}">${pv}</a>`;
+    return `<button class="${cls}" data-pv="${pv}" aria-label="${fmtPV(pv)}">${pv}</button>`;
   };
   const panel = PANEL.map(lado => `<div class="panel">${lado.arriba.map(celda).join("")}${lado.abajo.map(celda).join("")}</div>`).join("");
+  const e = estadoInversor(ocup, inv);
   app.innerHTML = `
     <div class="card">
-      <div class="stat"><span>PV habituales conectados</span><b id="cnt"></b></div>
+      <div class="stat"><span>PV habituales conectados</span><b>${e.usadas} / ${PV_HABITUALES.size}</b></div>
       ${panel}
-      <p class="muted leyenda"><span class="c-ok">■</span> conectado <span class="c-falta">■</span> falta <span class="c-err">■</span> novedad <span class="c-vacio">■</span> normalmente vacío</p>
-      <p class="muted">Lee la marquilla del cable que llega a cada PV y elige ese string (ordenados por número de string). Primero aparecen los que dicen ${fmtInv(inv)}. ✓ = string ya asociado a algún PV.</p>
+      <p class="muted"><span class="c-ok">●</span> conectado <span class="c-falta">●</span> falta <span class="c-err">●</span> novedad <span class="c-vacio">●</span> normalmente vacío</p>
+      <p class="muted">Toca un PV, escribe el número de tracker y de string de la marquilla (ej. <b>85 5</b>) y elige el string. Pasa solo al siguiente PV libre.</p>
     </div>
     <div class="card">${filas}</div>
     <div class="nav-t">
       <button class="btn sec" id="ant" ${inv === 1 ? "disabled" : ""}>‹ ${inv > 1 ? fmtInv(inv - 1) : ""}</button>
       <button class="btn" id="sig" ${inv === INVERSORES ? "disabled" : ""}>${inv < INVERSORES ? fmtInv(inv + 1) : ""} ›</button>
     </div>`;
-
-  let usadas = 0;
-  app.querySelectorAll("[data-ir]").forEach(a => a.onclick = ev => {
-    ev.preventDefault(); document.getElementById("pv" + a.dataset.ir).scrollIntoView({ behavior: "smooth", block: "center" });
-  });
-  app.querySelectorAll(".pv").forEach(div => {
-    const pv = +div.dataset.pv, u = ocup[inv + "|" + pv] || [], msgs = [];
-    div.querySelector(".sel").value = u[0] ? u[0].id + "|" + u[0].i : "";
-    if (u.length && PV_HABITUALES.has(pv)) usadas++;
-    if (u.length && !PV_HABITUALES.has(pv)) msgs.push(`<span class="err">⚠ Novedad: este PV normalmente va vacío</span>`);
-    if (u.length > 1) msgs.push(`<span class="err">⚠ Hay ${u.length} strings en este PV: ${u.map(x => `${esc(x.id.split(".")[1])} S${x.i + 1}`).join(", ")}</span>`);
-    if (u[0]) {
-      const s = registros[u[0].id].s[u[0].i], t = u[0].id.split(".")[1];
-      msgs.push(`Tracker real: <a href="#/t/${esc(u[0].id)}">${esc(t)} S${u[0].i + 1}</a>`);
-      if (s.mInv && s.mInv !== inv) msgs.push(`<span class="err">⚠ La marquilla dice ${fmtInv(s.mInv)}</span>`);
-      if (s.mTr && s.mTr !== numTr(t)) msgs.push(`<span class="warn">⚠ Marquilla de ${fmtTr(s.mTr, prefTr(t))}</span>`);
-    }
-    div.querySelector(".info").innerHTML = msgs.join(" · ");
-  });
-  document.getElementById("cnt").textContent = `${usadas} / ${PV_HABITUALES.size}`;
-
-  app.querySelectorAll(".pv .sel").forEach(sel => sel.addEventListener("change", () => {
-    const pv = +sel.closest(".pv").dataset.pv, y = window.scrollY;
-    let destino = null;
-    if (sel.value) {
-      const k = sel.value.lastIndexOf("|");
-      destino = { id: sel.value.slice(0, k), i: +sel.value.slice(k + 1) };
-      const s = registros[destino.id]?.s?.[destino.i];
-      if (conectado(s) && !(s.inv === inv && s.ent === pv) &&
-          !confirm(`Ese string ya está en ${fmtInv(s.inv)} ${fmtPV(s.ent)}. ¿Moverlo a ${fmtInv(inv)} ${fmtPV(pv)}?`)) {
-        vistaInversor(sc, inv); window.scrollTo(0, y); return;
-      }
-    }
-    const cambiados = [];
-    // Libera lo que estaba en este PV y conecta el string elegido
-    for (const u of ocupacion(sc)[inv + "|" + pv] || []) { Object.assign(registros[u.id].s[u.i], { inv: "", ent: "" }); cambiados.push(u.id); }
-    if (destino) {
-      const r = registros[destino.id] ||= { n: nStrings(destino.id), s: [], obs: "" };
-      Object.assign(r.s[destino.i] ||= {}, { inv, ent: pv });
-      cambiados.push(destino.id);
-    }
-    sellar(cambiados); guardarRegistros(cambiados);
-    vistaInversor(sc, inv); window.scrollTo(0, y);
-  }));
+  app.querySelectorAll("[data-pv]").forEach(b => b.onclick = () => abrirBuscador(sc, inv, +b.dataset.pv));
   document.getElementById("ant").onclick = () => location.replace(`#/inv/${sc}/${inv - 1}`);
   document.getElementById("sig").onclick = () => location.replace(`#/inv/${sc}/${inv + 1}`);
+}
+
+// ---------- Buscador de strings para un PV ----------
+// Busca por la marquilla: "85" = tracker 85, "85 5" = tracker 85 string 5. Sin texto: los que dicen este inversor y faltan.
+function buscarStrings(sc, inv, q) {
+  const nums = (q.match(/\d+/g) || []).map(Number), out = [];
+  for (const t of window.TRACKERS[sc]) {
+    const id = sc + "." + t, real = numTr(t), n = nStrings(id);
+    for (let i = 0; i < n; i++) {
+      const s = registros[id]?.s?.[i] || {};
+      if (!nums.length) { if (!(levantado(s) && s.mInv === inv && !conectado(s))) continue; }
+      else {
+        if (s.mTr !== nums[0] && real !== nums[0]) continue;
+        if (nums[1] && s.mStr !== nums[1] && !(!s.mStr && i + 1 === nums[1])) continue;
+      }
+      out.push({ id, t, i, s });
+    }
+  }
+  const peso = x => (x.s.mInv === inv ? 0 : 2) + (conectado(x.s) ? 1 : 0);
+  out.sort((a, b) => peso(a) - peso(b) || (a.s.mStr || 99) - (b.s.mStr || 99) || numTr(a.t) - numTr(b.t) || a.i - b.i);
+  return out.slice(0, 40);
+}
+
+const hoja = document.getElementById("hoja");
+function cerrarBuscador() { hoja.classList.remove("ver"); hoja.innerHTML = ""; }
+hoja.addEventListener("click", e => { if (e.target === hoja) cerrarBuscador(); });
+
+function abrirBuscador(sc, inv, pv) {
+  const hab = PV_HABITUALES.has(pv), actual = (ocupacion(sc)[inv + "|" + pv] || [])[0];
+  hoja.innerHTML = `<div class="hoja-panel">
+    <div class="hoja-top"><b>${fmtInv(inv)} · ${fmtPV(pv)}</b><button id="hCerrar" aria-label="Cerrar">✕</button></div>
+    ${hab ? "" : `<p class="err" style="margin-top:0">⚠ Este PV normalmente va vacío. Si tiene un cable, quedará como novedad.</p>`}
+    ${actual ? `<p class="muted" style="margin-top:0">Ahora: <b>${esc(etiquetaString({ s: registros[actual.id].s[actual.i], t: nomTr(actual.id), i: actual.i }))}</b></p>` : ""}
+    <label for="hQ">Marquilla del cable: tracker y string</label>
+    <input id="hQ" inputmode="tel" autocomplete="off" placeholder="Ej. 85 5">
+    <label class="check"><input type="checkbox" id="hAuto" ${leer(K.auto, true) ? "checked" : ""}>Pasar solo al siguiente PV libre</label>
+    <div id="hRes"></div>
+    ${actual ? `<button class="btn peligro" id="hLibre">Dejar ${fmtPV(pv)} libre</button>` : ""}
+  </div>`;
+  hoja.classList.add("ver");
+  const q = document.getElementById("hQ"), res = document.getElementById("hRes");
+  let lista = [];
+  function pintar() {
+    lista = buscarStrings(sc, inv, q.value);
+    const vacio = !q.value.trim();
+    res.innerHTML = (vacio ? `<p class="muted">Strings con marquilla ${fmtInv(inv)} que faltan por conectar:</p>` : "") +
+      (lista.length ? lista.map((x, k) => {
+        const notas = [];
+        if (levantado(x.s) && x.s.mTr !== numTr(x.t)) notas.push(`<span class="warn">Tracker real ${esc(x.t)} S${x.i + 1}</span>`);
+        else notas.push(`Tracker real ${esc(x.t)} S${x.i + 1}`);
+        if (x.s.mInv && x.s.mInv !== inv) notas.push(`<span class="err">marquilla de ${fmtInv(x.s.mInv)}</span>`);
+        if (conectado(x.s)) notas.push(`ya en ${fmtInv(x.s.inv)} ${fmtPV(x.s.ent)}`);
+        return `<button class="res ${x.s.mInv === inv ? "propio" : ""}" data-k="${k}"><b>${esc(etiquetaString(x))}</b><small>${notas.join(" · ")}</small></button>`;
+      }).join("") : `<p class="muted">${vacio ? "No hay pendientes con esa marquilla. Escribe el número de tracker." : "Sin resultados para esa marquilla."}</p>`);
+    res.querySelectorAll(".res").forEach(b => b.onclick = () => elegir(lista[+b.dataset.k]));
+  }
+  function elegir(x) {
+    if (!asignarPV(sc, inv, pv, x ? { id: x.id, i: x.i } : null)) return;
+    const auto = document.getElementById("hAuto").checked;
+    escribir(K.auto, auto);
+    refrescar();
+    if (!x || !auto) return cerrarBuscador();
+    // Siguiente PV habitual sin cable, en orden
+    const ocup = ocupacion(sc), orden = [...PV_HABITUALES].sort((a, b) => a - b);
+    const sig = [...orden.filter(p => p > pv), ...orden.filter(p => p < pv)].find(p => !(ocup[inv + "|" + p] || []).length);
+    if (!sig) { cerrarBuscador(); return toast(`${fmtInv(inv)}: todos los PV habituales tienen string`); }
+    document.getElementById("pv" + sig)?.scrollIntoView({ block: "center" });
+    abrirBuscador(sc, inv, sig);
+  }
+  q.addEventListener("input", pintar);
+  q.addEventListener("keydown", e => { if (e.key === "Enter" && lista.length) elegir(lista[0]); });
+  document.getElementById("hAuto").onchange = e => escribir(K.auto, e.target.checked);
+  document.getElementById("hCerrar").onclick = cerrarBuscador;
+  if (actual) document.getElementById("hLibre").onclick = () => elegir(null);
+  pintar();
+  q.focus();
+}
+
+// ---------- Resumen por subcampo ----------
+function vistaResumen(sc) {
+  cabecera("Resumen " + sc, "#/sc/" + sc);
+  const ocup = ocupacion(sc), marq = marquillas(sc), esperados = {};
+  let nS = 0, lev = 0, con = 0;
+  const cuenta = { completo: 0, parcial: 0, pendiente: 0 }, novs = [], pend = [];
+  for (const t of window.TRACKERS[sc]) {
+    const id = sc + "." + t, a = avance(id), e = estado(id);
+    nS += a.n; lev += a.lev; con += a.con; cuenta[e]++;
+    if (e !== "completo") pend.push({ id, t, a, e });
+    for (const nv of novedades(id, ocup, marq)) novs.push({ id, t, ...nv });
+    const r = registros[id];
+    for (let i = 0; i < (r?.n || 0); i++) { const s = r.s?.[i]; if (levantado(s)) esperados[s.mInv] = (esperados[s.mInv] || 0) + 1; }
+  }
+  const total = window.TRACKERS[sc].length;
+  const filasInv = Array.from({ length: INVERSORES }, (_, k) => k + 1).map(inv => {
+    const e = estadoInversor(ocup, inv);
+    return `<tr><td><a href="#/inv/${esc(sc)}/${inv}">${fmtInv(inv)}</a></td><td>${e.usadas}/${PV_HABITUALES.size}</td>
+      <td>${esperados[inv] || 0}</td><td class="${e.fuera ? "err" : ""}">${e.fuera}</td><td class="${e.dup ? "err" : ""}">${e.dup}</td></tr>`;
+  }).join("");
+  app.innerHTML = `
+    <div class="card">
+      <h2>Subcampo ${esc(sc)}</h2>
+      <p class="muted" style="margin-top:-6px">Generado ${esc(ahora())} por ${esc(tecnico())}${leer(K.syncUlt, "") ? ` · última sincronización ${esc(leer(K.syncUlt, ""))}` : ""}</p>
+      <div class="stat"><span>Trackers completos</span><b>${cuenta.completo} / ${total}</b></div>
+      <div class="stat"><span>Trackers incompletos</span><b>${cuenta.parcial}</b></div>
+      <div class="stat"><span>Trackers sin visitar</span><b>${cuenta.pendiente}</b></div>
+      <div class="stat"><span>Strings con marquilla anotada</span><b>${lev} / ${nS}</b></div>
+      <div class="stat"><span>Strings asociados en inversor</span><b>${con} / ${nS}</b></div>
+      <div class="stat"><span>Novedades</span><b class="${novs.length ? "err" : ""}">${novs.length}</b></div>
+      <button class="btn no-imprimir" id="imprimir">Imprimir / guardar PDF</button>
+    </div>
+    <div class="card">
+      <h2>Avance por inversor</h2>
+      <table class="tabla"><thead><tr><th>Inversor</th><th>PV conectados</th><th>Marquillas</th><th>PV no habitual</th><th>PV doble</th></tr></thead>
+      <tbody>${filasInv}</tbody></table>
+      <p class="muted">Marquillas = strings cuya marquilla dice ese inversor.</p>
+    </div>
+    <div class="card">
+      <h2>Novedades (${novs.length})</h2>
+      ${novs.length ? `<ul class="lista-nov">${novs.map(x => `<li><a href="#/t/${esc(x.id)}">${esc(x.t)}</a> ${esc(x.txt)}</li>`).join("")}</ul>` : `<p class="muted">Sin novedades.</p>`}
+    </div>
+    <div class="card">
+      <h2>Trackers por terminar (${pend.length})</h2>
+      ${pend.length ? `<ul class="lista-nov">${pend.map(x => `<li><a href="#/t/${esc(x.id)}">${esc(x.t)}</a> · ${TXT_ESTADO[x.e]} · marquillas ${x.a.lev}/${x.a.n} · inversor ${x.a.con}/${x.a.n}</li>`).join("")}</ul>` : `<p class="muted">Todos completos.</p>`}
+    </div>`;
+  document.getElementById("imprimir").onclick = () => window.print();
+}
+
+// ---------- Historial ----------
+function vistaHistorial(filtro) {
+  cabecera(filtro ? "Historial " + nomTr(filtro) : "Historial", filtro ? "#/t/" + filtro : "#/ajustes");
+  const hist = leer(K.hist, []).filter(e => !filtro || e.cambios.some(c => c.id === filtro)).reverse();
+  app.innerHTML = `
+    <div class="card">
+      <p class="muted" style="margin-top:0">Cambios hechos en este teléfono (últimos ${MAX_HIST}). Deshacer devuelve los datos a como estaban antes de ese cambio.</p>
+      ${hist.length ? hist.map(e => {
+        const lineas = e.cambios.flatMap(c => diferencias(c.antes, c.despues).map(d => `${nomTr(c.id)} ${d}`));
+        return `<div class="hist ${e.deshecho ? "deshecho" : ""}">
+          <b>${esc(e.desc)}</b><div class="muted">${esc(e.f)} · ${esc(e.tec)}${e.deshecho ? " · deshecho" : ""}</div>
+          <ul>${lineas.slice(0, 8).map(l => `<li>${esc(l)}</li>`).join("")}${lineas.length > 8 ? `<li>… y ${lineas.length - 8} más</li>` : ""}</ul>
+          ${e.deshecho || e.tipo === "deshacer" ? "" : `<button class="btn sec" data-h="${esc(e.id)}">Deshacer</button>`}
+        </div>`;
+      }).join("") : `<p class="muted">Todavía no hay cambios.</p>`}
+    </div>`;
+  app.querySelectorAll("[data-h]").forEach(b => b.onclick = () => deshacer(b.dataset.h));
 }
 
 // ---------- Exportar / importar ----------
 const COLS = ["Subcampo", "Tracker real", "Nombre completo", "Nº strings", "String", "Marquilla tracker", "Marquilla inversor", "Marquilla string",
   "Inversor conectado", "PV", "Marquilla = tracker", "Marquilla = inversor", "PV habitual", "Estado", "Observaciones", "Técnico", "Fecha"];
-const ANCHOS = [10, 11, 16, 10, 7, 15, 16, 14, 16, 7, 17, 18, 19, 11, 24, 16, 17];
+const ANCHOS = [10, 11, 16, 10, 7, 15, 16, 14, 16, 7, 17, 18, 13, 11, 24, 16, 17];
 function filasExport() {
   const filas = [];
   for (const sc of Object.keys(window.TRACKERS)) for (const t of window.TRACKERS[sc]) {
     const id = sc + "." + t, r = registros[id];
-    if (!r) continue;
+    if (!tieneDatos(r)) continue;
     const n = r.n || 4, e = TXT_ESTADO[estado(id)], real = numTr(t);
     for (let i = 0; i < n; i++) {
       const s = r.s?.[i] || {};
@@ -757,22 +1164,6 @@ function filasPendientes() {
     if (e !== "completo") f.push([sc, t, id, TXT_ESTADO[e], `${a.lev}/${a.n}`, `${a.con}/${a.n}`]);
   }
   return f;
-}
-
-// Une dos registros del mismo tracker campo por campo (ej. uno levantó marquillas y otro el inversor)
-function fusionar(a, b) {
-  const [rec, ant] = (b.fecha || "") > (a.fecha || "") ? [b, a] : [a, b];
-  const out = { n: rec.n || ant.n || 4, s: [], obs: rec.obs || ant.obs || "", tec: rec.tec || ant.tec || "", fecha: rec.fecha || ant.fecha || "" };
-  const dif = [];
-  for (let i = 0; i < 4; i++) {
-    const x = rec.s?.[i] || {}, y = ant.s?.[i] || {}, s = {};
-    for (const c of CAMPOS) {
-      s[c] = x[c] || y[c] || "";
-      if (x[c] && y[c] && x[c] !== y[c]) dif.push(`S${i + 1} ${TXT_CAMPO[c]}`);
-    }
-    out.s[i] = s;
-  }
-  return [out, dif, rec];
 }
 
 // XLSX mínimo (zip sin compresión) para no depender de librerías ni de internet
@@ -848,7 +1239,8 @@ function marcarExportado() { escribir(K.exp, ahora()); escribir(K.cambios, []); 
 
 function vistaExportar() {
   cabecera("Exportar datos", "#/");
-  const filas = filasExport(), nt = Object.keys(registros).length;
+  const filas = filasExport(), nt = Object.values(registros).filter(tieneDatos).length;
+  const conSync = !!leer(K.syncUrl, "");
   app.innerHTML = `
     <div class="card">
       <div class="stat"><span>Trackers con datos</span><b>${nt}</b></div>
@@ -856,6 +1248,12 @@ function vistaExportar() {
       <div class="stat"><span>Última exportación</span><b>${esc(leer(K.exp, "nunca"))}</b></div>
       <div class="stat"><span>Trackers modificados sin exportar</span><b>${nCambios()}</b></div>
     </div>
+    ${conSync ? `<div class="card">
+      <h2>Envío automático a la oficina</h2>
+      <div class="stat"><span>Pendientes de enviar</span><b>${leer(K.sync, []).length}</b></div>
+      <div class="stat"><span>Última sincronización</span><b>${esc(leer(K.syncUlt, "nunca"))}</b></div>
+      <button class="btn" id="syncYa">Enviar ahora</button>
+    </div>` : ""}
     <div class="card">
       <h2>Enviar a la oficina</h2>
       <p class="muted">Genera el archivo y compártelo por WhatsApp, correo o Drive cuando tengas señal. Funciona sin internet.</p>
@@ -865,10 +1263,11 @@ function vistaExportar() {
     </div>
     <div class="card">
       <h2>Unir datos de otros técnicos</h2>
-      <p class="muted">Carga archivos .json (copia de seguridad) o .csv exportados por esta app. Los datos se unen campo por campo (ej. un técnico anotó marquillas y otro el inversor). Si un mismo dato es distinto, se queda el más reciente y se lista para revisar.</p>
+      <p class="muted">Carga archivos .json (copia de seguridad) o .csv exportados por esta app. Con .json gana el dato modificado más reciente; con .csv solo se completan datos vacíos.</p>
       <input type="file" id="imp" accept=".json,.csv,application/json,text/csv" multiple>
       <div id="impRes" class="muted" style="margin-top:8px"></div>
     </div>`;
+  if (conSync) document.getElementById("syncYa").onclick = async () => { await sincronizar(true); vistaExportar(); };
   document.getElementById("exXlsx").onclick = async () => {
     if (!filas.length) return toast("Aún no hay datos para exportar");
     const blob = xlsx([
@@ -887,28 +1286,28 @@ function vistaExportar() {
     if (await compartir(blob, nombreArchivo("json"))) { marcarExportado(); vistaExportar(); }
   };
   document.getElementById("imp").onchange = async ev => {
-    let nuevos = 0, actualizados = 0, conflictos = [], errores = [];
+    let nuevos = 0, actualizados = 0;
+    const conflictos = [], errores = [], tocados = [];
     for (const f of ev.target.files) {
       try {
         const texto = await f.text();
         const entrantes = f.name.toLowerCase().endsWith(".json") ? JSON.parse(texto).registros : desdeCsv(texto);
         if (!entrantes || typeof entrantes !== "object") throw new Error("formato no reconocido");
         for (const [id, r] of Object.entries(entrantes)) {
-          const [sc, t] = id.split(".");
-          if (!window.TRACKERS[sc]?.includes(t)) { errores.push(`${f.name}: ${id} no existe`); continue; }
+          if (!existeTracker(id)) { errores.push(`${f.name}: ${id} no existe`); continue; }
           const actual = registros[id];
-          if (!actual) { registros[id] = r; nuevos++; continue; }
+          if (!actual) { registros[id] = r; nuevos++; tocados.push(id); continue; }
           const [unido, dif, rec] = fusionar(actual, r);
-          if (JSON.stringify(unido) !== JSON.stringify(actual)) { registros[id] = unido; actualizados++; }
-          if (dif.length) conflictos.push(`${id}: ${dif.join(", ")} (quedó lo de ${rec.tec} ${rec.fecha})`);
+          if (JSON.stringify(unido) !== JSON.stringify(actual)) { registros[id] = unido; actualizados++; tocados.push(id); }
+          if (dif.length) conflictos.push(`${id}: ${dif.join(", ")} (quedó lo más reciente: ${rec.tec} ${rec.fecha})`);
         }
       } catch (e) { errores.push(`${f.name}: ${e.message}`); }
     }
-    guardarRegistros();
+    guardarRegistros(tocados);
     document.getElementById("impRes").innerHTML =
       `Nuevos: <b>${nuevos}</b> · Actualizados: <b>${actualizados}</b> · Con diferencias: <b>${conflictos.length}</b>` +
-      (conflictos.length ? `<br><br>Trackers con datos distintos entre técnicos (revisar):<br>${conflictos.map(esc).join("<br>")}` : "") +
-      (errores.length ? `<br><br><span style="color:var(--err)">${errores.slice(0, 20).map(esc).join("<br>")}</span>` : "");
+      (conflictos.length ? `<br><br>Datos distintos entre técnicos (revisar):<br>${conflictos.map(esc).join("<br>")}` : "") +
+      (errores.length ? `<br><br><span class="err">${errores.slice(0, 20).map(esc).join("<br>")}</span>` : "");
   };
 }
 
@@ -943,6 +1342,7 @@ function desdeCsv(texto) {
 function vistaAjustes() {
   cabecera("Ajustes", "#/");
   const total = Object.values(window.TRACKERS).reduce((a, t) => a + t.length, 0);
+  const sol = document.documentElement.classList.contains("sol");
   app.innerHTML = `
     <div class="card">
       <label for="nom">Nombre del técnico</label>
@@ -950,14 +1350,35 @@ function vistaAjustes() {
       <button class="btn" id="okNom">Guardar nombre</button>
     </div>
     <div class="card">
+      <h2>Envío automático a la oficina</h2>
+      <p class="muted" style="margin-top:-6px">Pega la dirección de la aplicación web de Google Apps Script y la clave que te dieron en la oficina. Los datos se envían solos cuando hay señal y se reciben los de los otros técnicos.</p>
+      <label for="sUrl">Dirección (URL)</label>
+      <input id="sUrl" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(leer(K.syncUrl, ""))}">
+      <label for="sClave" style="margin-top:10px">Clave</label>
+      <input id="sClave" autocomplete="off" value="${esc(leer(K.syncClave, ""))}">
+      <button class="btn" id="sGuardar">Guardar y sincronizar</button>
+      <div class="stat" style="margin-top:10px"><span>Pendientes de enviar</span><b>${leer(K.sync, []).length}</b></div>
+      <div class="stat"><span>Última sincronización</span><b>${esc(leer(K.syncUlt, "nunca"))}</b></div>
+      ${leer(K.syncErr, "") ? `<p class="err">Último error: ${esc(leer(K.syncErr, ""))}</p>` : ""}
+    </div>
+    <div class="card">
+      <h2>Pantalla</h2>
+      <button class="btn sec" id="sol">${sol ? "Desactivar" : "Activar"} modo sol (alto contraste)</button>
+      <p class="muted">También con el botón ☀ de arriba.</p>
+    </div>
+    <div class="card">
+      <h2>Historial</h2>
+      <a class="btn sec enlace" href="#/historial">Ver cambios y deshacer</a>
+    </div>
+    <div class="card">
       <div class="stat"><span>Subcampos</span><b>${Object.keys(window.TRACKERS).length}</b></div>
       <div class="stat"><span>Trackers en nomenclatura</span><b>${total}</b></div>
-      <div class="stat"><span>Trackers con datos</span><b>${Object.keys(registros).length}</b></div>
+      <div class="stat"><span>Trackers con datos</span><b>${Object.values(registros).filter(tieneDatos).length}</b></div>
       <div class="stat"><span>Versión</span><b>${VERSION}</b></div>
     </div>
     <div class="card">
       <h2>Borrar todo</h2>
-      <p class="muted">Elimina todos los registros de este teléfono. Exporta antes una copia de seguridad.</p>
+      <p class="muted">Elimina todos los registros de este teléfono (no los de la oficina; si el envío automático está activo, volverán a bajar). Exporta antes una copia de seguridad.</p>
       <button class="btn peligro" id="borrarTodo">Borrar todos los datos</button>
     </div>`;
   document.getElementById("okNom").onclick = () => {
@@ -965,10 +1386,23 @@ function vistaAjustes() {
     if (!v) return toast("Escribe un nombre");
     escribir(K.tec, v); toast("Nombre guardado");
   };
+  document.getElementById("sGuardar").onclick = async () => {
+    const url = document.getElementById("sUrl").value.trim(), clave = document.getElementById("sClave").value.trim();
+    if (url && !/^https:\/\/script\.google(usercontent)?\.com\/|^http:\/\/localhost[:/]/.test(url)) return toast("La dirección debe empezar por https://script.google.com/");
+    escribir(K.syncUrl, url); escribir(K.syncClave, clave);
+    if (!url) { pintarNube(); return toast("Envío automático desactivado"); }
+    // La primera vez se envía todo lo que ya hay en el teléfono
+    if (!leer(K.syncDesde, 0)) agregarA(K.sync, Object.keys(registros));
+    pintarNube();
+    await sincronizar(true);
+    vistaAjustes();
+  };
+  document.getElementById("sol").onclick = () => { document.getElementById("btnSol").click(); vistaAjustes(); };
   document.getElementById("borrarTodo").onclick = () => {
-    const r = prompt('Escribe BORRAR para eliminar todos los registros de este teléfono');
-    if (r !== "BORRAR") return;
-    registros = {}; escribir(K.reg, registros); escribir(K.cambios, []); pintarBadge(); toast("Datos eliminados");
+    if (!confirm("¿Borrar TODOS los registros de este teléfono?")) return;
+    if (!confirm("Esto no se puede deshacer. ¿Seguro que quieres borrar todo?")) return;
+    registros = {}; escribir(K.reg, registros); escribir(K.cambios, []); escribir(K.sync, []); escribir(K.syncDesde, 0);
+    pintarBadge(); pintarNube(); toast("Datos eliminados");
   };
 }
 
@@ -978,10 +1412,14 @@ function pintarBadge() {
 }
 
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js");
-// Normaliza los campos a números (por si hay registros de versiones anteriores)
-for (const r of Object.values(registros)) (r.s || []).forEach(s => { if (s) CAMPOS.forEach(c => { s[c] = aNum(s[c]); }); });
-pintarBadge();
+// Normaliza los datos (por si hay registros de versiones anteriores)
+for (const r of Object.values(registros)) {
+  r.ts ||= {};
+  (r.s || []).forEach((s, i, arr) => { arr[i] = s || {}; CAMPOS.forEach(c => { arr[i][c] = aNum(arr[i][c]); }); });
+}
+pintarBadge(); pintarNube();
 enrutar();
+setTimeout(() => sincronizar(false), 2000);
 </script>
 </body>
 </html>
