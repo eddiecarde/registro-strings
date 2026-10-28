@@ -1,6 +1,6 @@
 // Cache para uso sin internet. Cambia VERSION al publicar una actualización.
-const VERSION = "rs-v8";
-const ARCHIVOS = ["./", "index.html", "trackers.js", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png"];
+const VERSION = "rs-v9";
+const ARCHIVOS = ["./", "index.html", "trackers.js", "diseno.js", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(ARCHIVOS.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
